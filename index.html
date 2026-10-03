@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stop the Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* Layout: a single LED scoreboard filling the screen, set-up controls tucked along the bottom,
+   scores slide in from the right. One deliberate dark look: a lit green LED panel in a dark case. */
+:root {
+  color-scheme: dark;
+  --bg: #08100b;          /* room behind the scoreboard */
+  --case: #030604;        /* the LED panel itself */
+  --rim: #1a2a20;         /* panel bezel, hairlines */
+  --ink: #d5e4da;         /* UI text */
+  --muted: #7d9486;       /* secondary text */
+  --led: #45ff78;         /* lit segment */
+  --led-glow: rgba(69, 255, 120, 0.55);
+  --led-off: rgba(69, 255, 120, 0.06);
+  --amber: #ffb340;       /* "missed it" */
+  --chip: #0f1a13;
+  --chip-on: #173d24;
+  --font-label: "Chakra Petch", "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+
+.app {
+  min-height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  padding-inline: 16px;
+  padding-block: 8px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ---- top bar ---- */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.brand {
+  font-family: var(--font-label);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.top-actions { display: flex; gap: 8px; }
+
+.btn {
+  background: var(--chip);
+  border: 1px solid var(--rim);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--chip-on); border-color: var(--led); }
+
+/* ---- stage ---- */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2.5vh, 24px);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+}
+.target-line {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: clamp(0.9rem, 2.2vw, 1.4rem);
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+.target-line b {
+  color: var(--led);
+  font-weight: 700;
+  font-size: 1.9em;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px var(--led-glow);
+}
+.panel {
+  width: 100%;
+  max-width: 1150px;
+  box-sizing: border-box;
+  background: var(--case);
+  border: 1px solid var(--rim);
+  border-radius: clamp(10px, 2vw, 22px);
+  box-shadow: inset 0 0 0 6px #050906, inset 0 10px 40px rgba(0, 0, 0, 0.8), 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: clamp(14px, 3vw, 36px) clamp(14px, 4vw, 56px);
+  display: flex;
+  justify-content: center;
+}
+#display {
+  display: block;
+  width: min(100%, calc(33vh * 2.82));
+  height: auto;
+  max-width: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px var(--led-glow));
+}
+.seg { fill: var(--led-off); }
+.seg.on { fill: var(--led); }
+.panel.perfect #display { animation: flash 0.24s steps(1) 8; }
+@keyframes flash { 50% { opacity: 0.15; } }
+
+.verdict {
+  min-height: 4.6em;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.verdict .word {
+  font-family: var(--font-label);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: clamp(1.6rem, 5.5vw, 3rem);
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.verdict .diff {
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.verdict .best {
+  font-family: var(--font-label);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--led);
+  padding: 2px 10px;
+  border-radius: 999px;
+  margin-top: 6px;
+}
+.verdict[data-tier="perfect"] .word,
+.verdict[data-tier="great"] .word { color: var(--led); text-shadow: 0 0 18px var(--led-glow); }
+.verdict[data-tier="good"] .word { color: var(--ink); }
+.verdict[data-tier="miss"] .word { color: var(--amber); }
+.verdict .how { color: var(--muted); font-size: clamp(1rem, 2.2vw, 1.3rem); max-width: 34ch; text-wrap: balance; }
+
+.hint {
+  margin: 0;
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  color: var(--muted);
+}
+body[data-state="ready"] .hint { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+
+/* ---- set-up controls ---- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 24px;
+  border-top: 1px solid var(--rim);
+  padding-top: 12px;
+  transition: opacity 0.3s;
+}
+body[data-state="running"] .controls,
+body[data-state="running"] .top-actions { opacity: 0.12; pointer-events: none; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > label, .field > .flabel {
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chips .btn { padding: 6px 10px; font-variant-numeric: tabular-nums; }
+input[type="text"], input[type="number"], select {
+  background: var(--chip);
+  border: 1px solid var(--rim);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+#playerName { width: 12ch; }
+#customTarget { width: 7.5ch; font-variant-numeric: tabular-nums; }
+
+/* ---- scores drawer ---- */
+.scores {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(400px, 100%);
+  box-sizing: border-box;
+  background: #0b140e;
+  border-left: 1px solid var(--rim);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+.scores header { display: flex; justify-content: space-between; align-items: center; }
+.scores h2, .scores h3 { font-family: var(--font-label); margin: 0; letter-spacing: 0.06em; }
+.scores h2 { font-size: 1.3rem; }
+.scores h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
+.scores ol { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+.scores li {
+  display: grid;
+  grid-template-columns: 2ch 1fr auto auto;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rim);
+  font-variant-numeric: tabular-nums;
+  align-items: baseline;
+}
+.scores li .rank { color: var(--muted); font-size: 0.85rem; }
+.scores li .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scores li .time { color: var(--led); font-family: var(--font-label); }
+.scores li .off { color: var(--muted); font-size: 0.85rem; min-width: 6ch; text-align: right; }
+.scores li.zero .off { color: var(--led); }
+.scores .empty { color: var(--muted); margin: 8px 0 0; }
+.scores .danger[data-armed="true"] { border-color: var(--amber); color: var(--amber); }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.perfect #display, body[data-state="ready"] .hint { animation: none; }
+}
+</style>
+</head>
+<body data-state="ready">
+<div class="app">
+  <header class="top">
+    <div class="brand">Stop the Clock</div>
+    <div class="top-actions">
+      <button class="btn" id="scoresBtn" type="button" aria-expanded="false" aria-controls="scores">Scores</button>
+      <button class="btn" id="fsBtn" type="button">Full screen</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="target-line">Target <b id="targetText">10.00</b> seconds</div>
+    <div class="panel" id="panel">
+      <svg id="display" viewBox="0 0 282 100" role="img" aria-label="Stopwatch display"></svg>
+    </div>
+    <div class="verdict" id="verdict" aria-live="polite"></div>
+    <p class="hint" id="hint">Press the button to start</p>
+  </main>
+
+  <footer class="controls">
+    <div class="field">
+      <label for="playerName">Player</label>
+      <input id="playerName" type="text" maxlength="24" placeholder="Name" autocomplete="off">
+    </div>
+    <div class="field">
+      <span class="flabel" id="targetLabel">Target time (seconds)</span>
+      <div class="chips" id="chips" role="group" aria-labelledby="targetLabel">
+        <input id="customTarget" type="number" min="0.5" max="99" step="0.01" placeholder="Own" aria-label="Your own target in seconds">
+      </div>
+    </div>
+    <div class="field">
+      <label for="hideMode">Hide the clock</label>
+      <select id="hideMode">
+        <option value="off">Never (watch it run)</option>
+        <option value="1">After 1 second</option>
+        <option value="3">After 3 seconds</option>
+        <option value="half">Halfway to target</option>
+        <option value="0">Straight away</option>
+      </select>
+    </div>
+    <div class="field">
+      <span class="flabel">Sound</span>
+      <button class="btn" id="soundBtn" type="button" aria-pressed="true">Beeps on</button>
+    </div>
+  </footer>
+</div>
+
+<aside class="scores" id="scores" hidden aria-label="Scores">
+  <header>
+    <h2>Scores</h2>
+    <button class="btn" id="closeScores" type="button">Close</button>
+  </header>
+  <section>
+    <h3 id="bestTitle">Closest to 10.00 s</h3>
+    <ol id="bestList"></ol>
+  </section>
+  <section>
+    <h3>Last 10 goes</h3>
+    <ol id="recentList"></ol>
+  </section>
+  <button class="btn danger" id="clearBtn" type="button" data-armed="false">Clear all scores</button>
+</aside>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- storage (optional; the game works without it) ----------
+  const KEY = "stopTheClock.";
+  const load = (k, d) => { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} };
+
+  const settings = Object.assign({ target: 1000, hide: "off", sound: true, name: "" }, load("settings", {}));
+  if (!(Number.isInteger(settings.target) && settings.target >= 50 && settings.target <= 9900)) settings.target = 1000;
+  let attempts = load("attempts", []);
+  if (!Array.isArray(attempts)) attempts = [];
+
+  // All times are whole centiseconds (1000 = 10.00 s) to avoid rounding surprises.
+  const PRESETS = [100, 300, 500, 1000, 2000, 3000, 6000];
+  const MAX_CS = 9999;
+  const fmtSec = cs => (cs / 100).toFixed(2);
+
+  // ---------- seven-segment display ----------
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const SEGS = "abcdefg";
+  const GLYPHS = { "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg", "5": "acdfg",
+                   "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg", "-": "g", " ": "" };
+  const digits = [];
+  let dotEl;
+
+  (function buildDisplay() {
+    const svg = document.getElementById("display");
+    const W = 52, H = 92, t = 10, g = 1.4;
+    const L = t / 2, R = W - t / 2, T = t / 2, M = H / 2, B = H - t / 2, k = t / 2;
+    const hz = (x1, x2, y) => `${x1},${y} ${x1 + k},${y - k} ${x2 - k},${y - k} ${x2},${y} ${x2 - k},${y + k} ${x1 + k},${y + k}`;
+    const vt = (x, y1, y2) => `${x},${y1} ${x + k},${y1 + k} ${x + k},${y2 - k} ${x},${y2} ${x - k},${y2 - k} ${x - k},${y1 + k}`;
+    const shapes = {
+      a: hz(L + g, R - g, T), b: vt(R, T + g, M - g), c: vt(R, M + g, B - g), d: hz(L + g, R - g, B),
+      e: vt(L, M + g, B - g), f: vt(L, T + g, M - g), g: hz(L + g, R - g, M)
+    };
+    const root = document.createElementNS(SVGNS, "g");
+    root.setAttribute("transform", "translate(14 4) skewX(-7)");
+    [0, 66, 150, 216].forEach(x => {
+      const grp = document.createElementNS(SVGNS, "g");
+      grp.setAttribute("transform", `translate(${x} 0)`);
+      const d = {};
+      for (const s of SEGS) {
+        const p = document.createElementNS(SVGNS, "polygon");
+        p.setAttribute("points", shapes[s]);
+        p.setAttribute("class", "seg");
+        grp.appendChild(p);
+        d[s] = p;
+      }
+      root.appendChild(grp);
+      digits.push(d);
+    });
+    dotEl = document.createElementNS(SVGNS, "circle");
+    dotEl.setAttribute("cx", 134);
+    dotEl.setAttribute("cy", B);
+    dotEl.setAttribute("r", 6);
+    dotEl.setAttribute("class", "seg");
+    root.appendChild(dotEl);
+    svg.appendChild(root);
+  })();
+
+  let shown = "";
+  function show(str, dot = true) {
+    const key = str + dot;
+    if (key === shown) return;
+    shown = key;
+    for (let i = 0; i < 4; i++) {
+      const lit = GLYPHS[str[i]] || "";
+      for (const s of SEGS) digits[i][s].classList.toggle("on", lit.includes(s));
+    }
+    dotEl.classList.toggle("on", dot);
+  }
+  // 4 digits, like a real stopwatch: blank leading zero, e.g. " 9.87" / "10.00"
+  const clockStr = cs => {
+    const s = String(Math.min(cs, MAX_CS)).padStart(4, "0");
+    return (s[0] === "0" ? " " : s[0]) + s.slice(1);
+  };
+
+  // ---------- sound ----------
+  let ac = null;
+  function unlockAudio() {
+    if (!settings.sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+    } catch (e) {}
+  }
+  function tone(freq, dur, when = 0, vol = 0.05) {
+    if (!settings.sound || !ac) return;
+    try {
+      const t0 = ac.currentTime + when;
+      const o = ac.createOscillator(), gn = ac.createGain();
+      o.type = "square";
+      o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol, t0);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(gn).connect(ac.destination);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+
+  // ---------- keep the screen awake during a lesson ----------
+  let wakeLock = null, everPressed = false;
+  async function keepAwake() {
+    try {
+      if (!wakeLock && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      }
+    } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && everPressed) keepAwake();
+  });
+
+  // ---------- game ----------
+  const $ = id => document.getElementById(id);
+  const verdictEl = $("verdict"), hintEl = $("hint"), panelEl = $("panel");
+  let state = "ready", startT = 0, lastPress = -1e9;
+
+  // Ignore extra presses that arrive too soon (cheap switches "bounce", excited pupils double-tap).
+  const LOCKOUT = { ready: 300, running: 150, stopped: 600 };
+
+  function setState(s) { state = s; document.body.dataset.state = s; }
+
+  function hideAfterMs() {
+    switch (settings.hide) {
+      case "0": return 0;
+      case "1": return 1000;
+      case "3": return 3000;
+      case "half": return settings.target * 10 / 2;
+      default: return Infinity;
+    }
+  }
+
+  function press(t) {
+    const now = performance.now();
+    if (!(t > 0) || Math.abs(t - now) > 1000) t = now;
+    if (t - lastPress < LOCKOUT[state]) return;
+    lastPress = t;
+    everPressed = true;
+    unlockAudio();
+    keepAwake();
+    if (state === "ready") start(t);
+    else if (state === "running") stop(t);
+    else reset();
+  }
+
+  function start(t) {
+    startT = t;
+    setState("running");
+    panelEl.classList.remove("perfect");
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren();
+    hintEl.textContent = "Press to stop";
+    tone(880, 0.09);
+  }
+
+  function stop(t) {
+    const cs = Math.min(Math.floor((t - startT) / 10), MAX_CS);
+    setState("stopped");
+    show(clockStr(cs));
+    hintEl.textContent = "Press again to reset";
+    judge(cs);
+  }
+
+  function reset() {
+    setState("ready");
+    panelEl.classList.remove("perfect");
+    show(clockStr(0));
+    showHowTo();
+    hintEl.textContent = "Press the button to start";
+  }
+
+  const TIERS = [
+    [0, "Perfect!", "perfect"],
+    [2, "Incredible!", "great"],
+    [5, "So close!", "great"],
+    [10, "Great stop", "good"],
+    [25, "Good try", "good"],
+    [50, "Not bad", "miss"],
+    [Infinity, "Keep practising", "miss"]
+  ];
+
+  function judge(cs) {
+    const target = settings.target;
+    const diff = cs - target, off = Math.abs(diff);
+    const timedOut = cs >= MAX_CS;
+    const [, word, tier] = timedOut ? [0, "Time ran out", "miss"] : TIERS.find(([lim]) => off <= lim);
+
+    const prevBest = bestFor(target)[0];
+    const entry = { n: settings.name.trim(), t: target, r: cs, at: Date.now() };
+    attempts.push(entry);
+    if (attempts.length > 2000) attempts = attempts.slice(-2000);
+    save("attempts", attempts);
+
+    const w = document.createElement("div");
+    w.className = "word";
+    w.textContent = (entry.n ? entry.n + ": " : "") + word;
+    const d = document.createElement("div");
+    d.className = "diff";
+    d.textContent = diff === 0 ? "Exactly on target" : `${fmtSec(off)} s ${diff > 0 ? "late" : "early"}`;
+    verdictEl.replaceChildren(w, d);
+    verdictEl.dataset.tier = tier;
+
+    if (!timedOut && (!prevBest || off < Math.abs(prevBest.r - prevBest.t))) {
+      const b = document.createElement("div");
+      b.className = "best";
+      b.textContent = `New best for ${fmtSec(target)} s`;
+      verdictEl.appendChild(b);
+    }
+
+    if (tier === "perfect") {
+      panelEl.classList.add("perfect");
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 0.12 * i, 0.06));
+    } else {
+      tone(440, 0.14);
+    }
+    renderScores();
+  }
+
+  function showHowTo() {
+    const p = document.createElement("div");
+    p.className = "how";
+    p.textContent = `Start the clock, then stop it as close to ${fmtSec(settings.target)} seconds as you can.`;
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren(p);
+  }
+
+  // ---------- main loop: draw the clock + read USB game controllers ----------
+  const padPrev = {};
+  function pollPads() {
+    if (!navigator.getGamepads) return;
+    let hit = false;
+    for (const p of navigator.getGamepads()) {
+      if (!p) continue;
+      const now = p.buttons.map(b => b.pressed);
+      const prev = padPrev[p.index];
+      if (prev && now.some((v, i) => v && !prev[i])) hit = true;
+      padPrev[p.index] = now;
+    }
+    if (hit) press(performance.now());
+  }
+
+  function frame() {
+    pollPads();
+    if (state === "running") {
+      const el = performance.now() - startT;
+      if (el >= (MAX_CS + 1) * 10) stop(startT + (MAX_CS + 1) * 10);
+      else if (el >= hideAfterMs()) show("----", false);
+      else show(clockStr(Math.floor(el / 10)));
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- inputs ----------
+  // Almost any key counts as "the button", so whatever key a USB button,
+  // foot pedal or presentation clicker sends will work without setting anything up.
+  const IGNORED = new Set(["Tab", "Shift", "Control", "Alt", "AltGraph", "Meta", "OS", "CapsLock",
+    "NumLock", "ScrollLock", "ContextMenu", "Fn", "Escape", "Unidentified", "AudioVolumeUp",
+    "AudioVolumeDown", "AudioVolumeMute"]);
+
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeScores(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (IGNORED.has(e.key) || /^F\d{1,2}$/.test(e.key)) return;
+    const tgt = e.target;
+    if (tgt && tgt.closest && tgt.closest("input, select, textarea")) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    press(e.timeStamp);
+  });
+
+  $("stage").addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    press(e.timeStamp);
+  });
+
+  // A mouse click leaves focus on a button; drop it so the next Space press goes to the game.
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("button");
+    if (b && e.detail > 0) b.blur();
+  });
+
+  // ---------- set-up controls ----------
+  const chipsEl = $("chips"), customEl = $("customTarget");
+  const chipBtns = PRESETS.map(cs => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn";
+    b.textContent = String(cs / 100);
+    b.addEventListener("click", () => setTarget(cs));
+    chipsEl.insertBefore(b, customEl);
+    return { cs, b };
+  });
+  const randomBtn = document.createElement("button");
+  randomBtn.type = "button";
+  randomBtn.className = "btn";
+  randomBtn.textContent = "Random";
+  randomBtn.addEventListener("click", () => {
+    let cs;
+    do { cs = (2 + Math.floor(Math.random() * 14)) * 100; } while (cs === settings.target);
+    setTarget(cs);
+  });
+  chipsEl.insertBefore(randomBtn, customEl);
+
+  function setTarget(cs) {
+    if (state === "running") return;
+    settings.target = cs;
+    save("settings", settings);
+    $("targetText").textContent = fmtSec(cs);
+    for (const c of chipBtns) c.b.setAttribute("aria-pressed", String(c.cs === cs));
+    if (!PRESETS.includes(cs)) customEl.value = fmtSec(cs); else customEl.value = "";
+    if (state === "stopped") reset(); else showHowTo();
+    renderScores();
+  }
+
+  customEl.addEventListener("change", () => {
+    const cs = Math.round(parseFloat(customEl.value) * 100);
+    if (cs >= 50 && cs <= 9900) setTarget(cs);
+    else customEl.value = PRESETS.includes(settings.target) ? "" : fmtSec(settings.target);
+    customEl.blur();
+  });
+  customEl.addEventListener("keydown", e => { if (e.key === "Enter") customEl.blur(); });
+
+  const nameEl = $("playerName");
+  nameEl.value = settings.name;
+  nameEl.addEventListener("input", () => { settings.name = nameEl.value; save("settings", settings); });
+  nameEl.addEventListener("keydown", e => { if (e.key === "Enter") nameEl.blur(); });
+
+  const hideEl = $("hideMode");
+  hideEl.value = settings.hide;
+  if (hideEl.value !== settings.hide) hideEl.value = "off";
+  hideEl.addEventListener("change", () => { settings.hide = hideEl.value; save("settings", settings); hideEl.blur(); });
+
+  const soundBtn = $("soundBtn");
+  function paintSound() {
+    soundBtn.setAttribute("aria-pressed", String(settings.sound));
+    soundBtn.textContent = settings.sound ? "Beeps on" : "Beeps off";
+  }
+  soundBtn.addEventListener("click", () => { settings.sound = !settings.sound; save("settings", settings); paintSound(); unlockAudio(); });
+  paintSound();
+
+  const fsBtn = $("fsBtn");
+  fsBtn.addEventListener("click", () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) {}
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fsBtn.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+  if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
+
+  // ---------- scores ----------
+  const scoresEl = $("scores"), scoresBtn = $("scoresBtn"), clearBtn = $("clearBtn");
+  function openScores() { renderScores(); scoresEl.hidden = false; scoresBtn.setAttribute("aria-expanded", "true"); }
+  function closeScores() { scoresEl.hidden = true; scoresBtn.setAttribute("aria-expanded", "false"); disarmClear(); }
+  scoresBtn.addEventListener("click", () => (scoresEl.hidden ? openScores() : closeScores()));
+  $("closeScores").addEventListener("click", closeScores);
+
+  function bestFor(target) {
+    return attempts
+      .filter(a => a.t === target && a.r < MAX_CS)
+      .sort((x, y) => Math.abs(x.r - x.t) - Math.abs(y.r - y.t) || x.at - y.at);
+  }
+
+  function row(a, rank) {
+    const li = document.createElement("li");
+    const diff = a.r - a.t;
+    if (diff === 0) li.className = "zero";
+    const cells = [
+      ["rank", rank],
+      ["who", a.n || "Anonymous"],
+      ["time", fmtSec(a.r)],
+      ["off", diff === 0 ? "spot on" : (diff > 0 ? "+" : "−") + fmtSec(Math.abs(diff))]
+    ];
+    for (const [cls, txt] of cells) {
+      const s = document.createElement("span");
+      s.className = cls;
+      s.textContent = txt;
+      li.appendChild(s);
+    }
+    return li;
+  }
+  function fill(list, items, emptyText, rankFn) {
+    if (!items.length) {
+      const p = document.createElement("li");
+      p.className = "empty";
+      p.style.display = "block";
+      p.style.border = "0";
+      p.textContent = emptyText;
+      list.replaceChildren(p);
+      return;
+    }
+    list.replaceChildren(...items.map((a, i) => row(a, rankFn(a, i))));
+  }
+  function renderScores() {
+    const t = settings.target;
+    $("bestTitle").textContent = `Closest to ${fmtSec(t)} s`;
+    fill($("bestList"), bestFor(t).slice(0, 10), `No goes at ${fmtSec(t)} s yet.`, (a, i) => i + 1);
+    fill($("recentList"), attempts.slice(-10).reverse(), "No goes yet.", a => "");
+  }
+
+  function disarmClear() { clearBtn.dataset.armed = "false"; clearBtn.textContent = "Clear all scores"; }
+  clearBtn.addEventListener("click", () => {
+    if (clearBtn.dataset.armed === "true") {
+      attempts = [];
+      save("attempts", attempts);
+      renderScores();
+      disarmClear();
+    } else {
+      clearBtn.dataset.armed = "true";
+      clearBtn.textContent = "Click again to delete every score";
+      setTimeout(disarmClear, 4000);
+    }
+  });
+
+  // ---------- boot ----------
+  show(clockStr(0));
+  setTarget(settings.target);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
