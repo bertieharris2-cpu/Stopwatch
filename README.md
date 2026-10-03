@@ -1,7 +1,7 @@
 # Stop the Clock
 
 A classroom version of the "stop the stopwatch on exactly 10.00 seconds" game.
-Big green LED-style digits, one button: press to start, press to stop, press again to reset.
+Big green LED-style digits (minutes : seconds . hundredths, like a gym timer), one button: press to start, press to stop, press again to reset.
 
 It is a single file, `index.html`. No installation, no internet needed once it is on the laptop
 (it will use a fallback font if offline).
@@ -20,11 +20,11 @@ Click **Full screen** before playing on the projector or interactive whiteboard.
 | Press | What happens |
 |-------|--------------|
 | 1st   | Clock starts |
-| 2nd   | Clock stops, shows how close you were (e.g. "0.03 s late") |
-| 3rd   | Clock resets to 0.00, ready for the next pupil |
+| 2nd   | Clock stops, shows how close you were (e.g. `00:10.03`, "0.03 s late") |
+| 3rd   | Clock resets to `00:00.00`, ready for the next pupil |
 
 - **Target time:** 1, 3, 5, 10, 20, 30, 60 seconds, **Random**, or type your own (0.5 to 99 s).
-- **Hide the clock:** makes it much harder. The digits turn to `--.--` after 1 s, 3 s, halfway, or
+- **Hide the clock:** makes it much harder. The digits turn to `--:--.--` after 1 s, 3 s, halfway, or
   straight away, so pupils have to count in their heads. The real time is revealed when they stop.
 - **Player:** type a name (press Enter when done) and it goes on the scoreboard.
 - **Scores:** top 10 closest for the current target, plus the last 10 goes. Scores are saved

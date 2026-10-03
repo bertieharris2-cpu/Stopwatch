@@ -129,7 +129,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 #display {
   display: block;
-  width: min(100%, calc(33vh * 2.82));
+  width: min(100%, calc(33vh * 4.32));
   height: auto;
   max-width: 100%;
   overflow: visible;
@@ -277,7 +277,7 @@ input[type="text"], input[type="number"], select {
   <main class="stage" id="stage">
     <div class="target-line">Target <b id="targetText">10.00</b> seconds</div>
     <div class="panel" id="panel">
-      <svg id="display" viewBox="0 0 282 100" role="img" aria-label="Stopwatch display"></svg>
+      <svg id="display" viewBox="0 0 432 100" role="img" aria-label="Stopwatch display"></svg>
     </div>
     <div class="verdict" id="verdict" aria-live="polite"></div>
     <p class="hint" id="hint">Press the button to start</p>
@@ -343,7 +343,7 @@ input[type="text"], input[type="number"], select {
 
   // All times are whole centiseconds (1000 = 10.00 s) to avoid rounding surprises.
   const PRESETS = [100, 300, 500, 1000, 2000, 3000, 6000];
-  const MAX_CS = 9999;
+  const MAX_CS = 99 * 6000 + 5999; // 99:59.99, the most six digits can show
   const fmtSec = cs => (cs / 100).toFixed(2);
 
   // ---------- seven-segment display ----------
@@ -366,7 +366,8 @@ input[type="text"], input[type="number"], select {
     };
     const root = document.createElementNS(SVGNS, "g");
     root.setAttribute("transform", "translate(14 4) skewX(-7)");
-    [0, 66, 150, 216].forEach(x => {
+    // MM : SS . hh — six digits like a gym timer
+    [0, 66, 150, 216, 300, 366].forEach(x => {
       const grp = document.createElementNS(SVGNS, "g");
       grp.setAttribute("transform", `translate(${x} 0)`);
       const d = {};
@@ -380,8 +381,16 @@ input[type="text"], input[type="number"], select {
       root.appendChild(grp);
       digits.push(d);
     });
+    for (const cy of [H * 0.3, H * 0.7]) {
+      const c = document.createElementNS(SVGNS, "circle");
+      c.setAttribute("cx", 134);
+      c.setAttribute("cy", cy);
+      c.setAttribute("r", 6);
+      c.setAttribute("class", "seg on");
+      root.appendChild(c);
+    }
     dotEl = document.createElementNS(SVGNS, "circle");
-    dotEl.setAttribute("cx", 134);
+    dotEl.setAttribute("cx", 284);
     dotEl.setAttribute("cy", B);
     dotEl.setAttribute("r", 6);
     dotEl.setAttribute("class", "seg");
@@ -394,16 +403,17 @@ input[type="text"], input[type="number"], select {
     const key = str + dot;
     if (key === shown) return;
     shown = key;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       const lit = GLYPHS[str[i]] || "";
       for (const s of SEGS) digits[i][s].classList.toggle("on", lit.includes(s));
     }
     dotEl.classList.toggle("on", dot);
   }
-  // 4 digits, like a real stopwatch: blank leading zero, e.g. " 9.87" / "10.00"
+  // minutes, seconds, hundredths: 10.00 s shows as 00:10.00
+  const two = n => String(n).padStart(2, "0");
   const clockStr = cs => {
-    const s = String(Math.min(cs, MAX_CS)).padStart(4, "0");
-    return (s[0] === "0" ? " " : s[0]) + s.slice(1);
+    cs = Math.min(cs, MAX_CS);
+    return two(Math.floor(cs / 6000)) + two(Math.floor(cs / 100) % 60) + two(cs % 100);
   };
 
   // ---------- sound ----------
@@ -578,7 +588,7 @@ input[type="text"], input[type="number"], select {
     if (state === "running") {
       const el = performance.now() - startT;
       if (el >= (MAX_CS + 1) * 10) stop(startT + (MAX_CS + 1) * 10);
-      else if (el >= hideAfterMs()) show("----", false);
+      else if (el >= hideAfterMs()) show("------", false);
       else show(clockStr(Math.floor(el / 10)));
     }
     requestAnimationFrame(frame);
