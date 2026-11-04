@@ -1,0 +1,1272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stop the Clock Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* Layout: the LED clock fills the screen with the current pupil above it and a strip showing the
+   recording conditions below. Pupils and Set-up slide in from the right; Data covers the screen.
+   One deliberate dark look: a lit green LED panel in a dark case. */
+:root {
+  color-scheme: dark;
+  --bg: #08100b;
+  --case: #030604;
+  --rim: #1a2a20;
+  --ink: #d5e4da;
+  --muted: #7d9486;
+  --led: #45ff78;
+  --led-glow: rgba(69, 255, 120, 0.55);
+  --led-off: rgba(69, 255, 120, 0.06);
+  --amber: #ffb340;
+  --chip: #0f1a13;
+  --chip-on: #173d24;
+  --sheet: #0b140e;
+  --font-label: "Chakra Petch", "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+
+.app {
+  min-height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  padding-inline: 16px;
+  padding-block: 8px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ---- top bar ---- */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.brand {
+  font-family: var(--font-label); font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; font-size: 0.85rem; color: var(--muted);
+}
+.brand small { color: var(--led); letter-spacing: 0.1em; margin-left: 0.4em; }
+.top-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn {
+  background: var(--chip);
+  border: 1px solid var(--rim);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--chip-on); border-color: var(--led); }
+.btn.small { padding: 3px 9px; font-size: 0.8rem; }
+.btn.warn { color: var(--amber); }
+.btn[data-armed="true"] { border-color: var(--amber); color: var(--amber); }
+
+/* ---- stage ---- */
+.stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(8px, 2vh, 20px);
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+}
+.pupil-line { display: flex; align-items: center; gap: 14px; max-width: 100%; }
+.pupil-line .btn { padding: 6px 12px; font-size: 1.1rem; }
+.pupil {
+  display: flex; flex-direction: column; align-items: center; min-width: 0;
+}
+.pupil .name {
+  font-family: var(--font-label); font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 3rem); line-height: 1.1;
+  max-width: 70vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pupil .name.none { color: var(--muted); font-size: clamp(1.1rem, 3vw, 1.6rem); }
+.pupil .go {
+  font-family: var(--font-label); text-transform: uppercase; letter-spacing: 0.16em;
+  font-size: 0.8rem; color: var(--muted);
+}
+.target-line {
+  font-family: var(--font-label); text-transform: uppercase; letter-spacing: 0.18em;
+  font-size: clamp(0.85rem, 2vw, 1.2rem); color: var(--muted);
+  display: flex; align-items: baseline; gap: 0.6em;
+}
+.target-line b {
+  color: var(--led); font-weight: 700; font-size: 1.7em; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums; text-shadow: 0 0 14px var(--led-glow);
+}
+.panel {
+  width: 100%; max-width: 1150px; box-sizing: border-box;
+  background: var(--case); border: 1px solid var(--rim);
+  border-radius: clamp(10px, 2vw, 22px);
+  box-shadow: inset 0 0 0 6px #050906, inset 0 10px 40px rgba(0, 0, 0, 0.8), 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: clamp(12px, 2.6vw, 32px) clamp(14px, 4vw, 56px);
+  display: flex; justify-content: center;
+}
+#display {
+  display: block; width: min(100%, calc(29vh * 4.32)); height: auto; max-width: 100%;
+  overflow: visible; filter: drop-shadow(0 0 6px var(--led-glow));
+}
+.seg { fill: var(--led-off); }
+.seg.on { fill: var(--led); }
+.panel.perfect #display { animation: flash 0.24s steps(1) 8; }
+@keyframes flash { 50% { opacity: 0.15; } }
+
+.verdict { min-height: 4.4em; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.verdict .word {
+  font-family: var(--font-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: clamp(1.4rem, 4.6vw, 2.6rem); line-height: 1.1; text-wrap: balance;
+}
+.verdict .diff { font-size: clamp(1rem, 2.2vw, 1.4rem); color: var(--muted); font-variant-numeric: tabular-nums; }
+.verdict .how { color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); max-width: 40ch; text-wrap: balance; }
+.verdict .saved { color: var(--led); font-family: var(--font-label); letter-spacing: 0.06em; font-size: clamp(1.1rem, 3vw, 1.8rem); }
+.verdict .practice { color: var(--amber); font-family: var(--font-label); letter-spacing: 0.06em; font-size: clamp(1.1rem, 3vw, 1.6rem); }
+.verdict .after { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.verdict[data-tier="perfect"] .word, .verdict[data-tier="great"] .word { color: var(--led); text-shadow: 0 0 18px var(--led-glow); }
+.verdict[data-tier="good"] .word { color: var(--ink); }
+.verdict[data-tier="miss"] .word { color: var(--amber); }
+
+.hint {
+  margin: 0; font-family: var(--font-label); text-transform: uppercase; letter-spacing: 0.16em;
+  font-size: clamp(0.8rem, 1.6vw, 1rem); color: var(--muted); text-align: center;
+}
+body[data-state="ready"] .hint { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+
+/* ---- conditions strip ---- */
+.conditions {
+  display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center;
+  border-top: 1px solid var(--rim); padding-top: 10px;
+  transition: opacity 0.3s;
+}
+.conditions .lbl {
+  font-family: var(--font-label); font-size: 0.72rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted); margin-right: 4px;
+}
+.cond {
+  background: transparent; border: 1px solid var(--rim); border-radius: 999px;
+  padding: 3px 10px; font-size: 0.85rem; cursor: pointer; color: var(--ink);
+}
+.cond b { font-weight: 700; color: var(--led); }
+.cond.practice { border-color: var(--amber); color: var(--amber); }
+body[data-state="running"] .conditions,
+body[data-state="running"] .top-actions,
+body[data-state="running"] .pupil-line .btn { opacity: 0.12; pointer-events: none; }
+
+/* ---- side drawers ---- */
+.drawer {
+  /* starts under the top bar so Pupils, Set-up and Data stay reachable */
+  position: fixed; top: var(--top-h, 0px); right: 0; bottom: 0; width: min(420px, 100%); box-sizing: border-box;
+  background: var(--sheet); border-left: 1px solid var(--rim); border-top: 1px solid var(--rim);
+  border-top-left-radius: 12px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6); z-index: 10;
+}
+.drawer header, .data header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.drawer h2, .data h2 { font-family: var(--font-label); margin: 0; letter-spacing: 0.06em; font-size: 1.3rem; }
+.drawer h3 {
+  font-family: var(--font-label); margin: 0 0 6px; font-size: 0.78rem; text-transform: uppercase;
+  letter-spacing: 0.14em; color: var(--muted); font-weight: 500;
+}
+.drawer p.note, .data p.note { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > label, .field > .flabel {
+  font-family: var(--font-label); font-size: 0.72rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check input { margin-top: 4px; accent-color: var(--led); width: 18px; height: 18px; }
+.check span small { display: block; color: var(--muted); }
+input[type="text"], input[type="number"], select, textarea {
+  background: var(--chip); border: 1px solid var(--rim); border-radius: 8px; padding: 7px 10px;
+}
+textarea { resize: vertical; min-height: 6em; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chips .btn { padding: 6px 10px; font-variant-numeric: tabular-nums; }
+#customTarget { width: 8ch; font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.roster { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.roster li {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--rim);
+}
+.roster .pick {
+  text-align: left; background: none; border: 0; padding: 4px 0; cursor: pointer;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.roster li.current .pick { color: var(--led); font-weight: 700; }
+.roster li.current .pick::before { content: "▶ "; }
+.roster .count { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.roster .empty { display: block; color: var(--muted); border: 0; }
+
+/* ---- data screen ---- */
+.data {
+  position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow-y: auto;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+}
+.data .bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+.tabs { display: flex; gap: 6px; }
+.status { min-height: 1.4em; color: var(--led); font-size: 0.95rem; margin: 0; }
+.status.err { color: var(--amber); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rim); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--rim); white-space: nowrap; }
+th {
+  font-family: var(--font-label); font-weight: 500; font-size: 0.75rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); background: var(--sheet); position: sticky; top: 0;
+}
+td.num, th.num { text-align: right; }
+tr.anomaly td { color: var(--muted); }
+tr.anomaly td.res { text-decoration: line-through; }
+tr.anomaly td.flag label { color: var(--amber); }
+td.flag label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+td.flag input { accent-color: var(--amber); }
+td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
+#copyBox { width: 100%; box-sizing: border-box; min-height: 8em; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.perfect #display, body[data-state="ready"] .hint { animation: none; }
+}
+</style>
+</head>
+<body data-state="ready">
+<div class="app">
+  <header class="top">
+    <div class="brand">Stop the Clock <small>Lab</small></div>
+    <div class="top-actions">
+      <button class="btn" id="pupilsBtn" type="button" aria-controls="pupilsDrawer" aria-expanded="false">Pupils</button>
+      <button class="btn" id="setupBtn" type="button" aria-controls="setupDrawer" aria-expanded="false">Set-up</button>
+      <button class="btn" id="dataBtn" type="button">Data</button>
+      <button class="btn" id="fsBtn" type="button">Full screen</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="pupil-line">
+      <button class="btn" id="prevPupil" type="button" aria-label="Previous pupil">◀</button>
+      <div class="pupil">
+        <div class="name" id="pupilName">No pupil chosen</div>
+        <div class="go" id="pupilGo"></div>
+      </div>
+      <button class="btn" id="nextPupil" type="button" aria-label="Next pupil">▶</button>
+    </div>
+    <div class="target-line">Target <b id="targetText">10.00</b> seconds</div>
+    <div class="panel" id="panel">
+      <svg id="display" viewBox="0 0 432 100" role="img" aria-label="Stopwatch display"></svg>
+    </div>
+    <div class="verdict" id="verdict" aria-live="polite"></div>
+    <p class="hint" id="hint">Press the button to start</p>
+  </main>
+
+  <footer class="conditions" id="conditions" aria-label="Recording conditions">
+    <span class="lbl">Recording with</span>
+  </footer>
+</div>
+
+<!-- Pupils -->
+<aside class="drawer" id="pupilsDrawer" hidden aria-label="Pupils">
+  <header>
+    <h2>Pupils</h2>
+    <button class="btn" type="button" data-close>Close</button>
+  </header>
+  <div class="field">
+    <label for="addPupils">Add pupils, one per line</label>
+    <textarea id="addPupils" placeholder="Amira&#10;Ben&#10;Chloe"></textarea>
+    <div class="row">
+      <button class="btn" id="addPupilsBtn" type="button">Add</button>
+      <button class="btn" id="shuffleBtn" type="button">Shuffle the order</button>
+    </div>
+    <p class="note">You can paste a list from a spreadsheet. Initials or pupil numbers work too if you would rather not use names.</p>
+  </div>
+  <section>
+    <h3 id="rosterTitle">Turn order</h3>
+    <ul class="roster" id="roster"></ul>
+  </section>
+  <p class="note">Click a name to make it their turn. Removing a pupil keeps the goes they have already had.</p>
+</aside>
+
+<!-- Set-up -->
+<aside class="drawer" id="setupDrawer" hidden aria-label="Set-up">
+  <header>
+    <h2>Set-up</h2>
+    <button class="btn" type="button" data-close>Close</button>
+  </header>
+  <div class="field">
+    <span class="flabel" id="targetLabel">Target time (seconds)</span>
+    <div class="chips" id="chips" role="group" aria-labelledby="targetLabel">
+      <input id="customTarget" type="number" min="0.5" max="99" step="0.01" placeholder="Own" aria-label="Your own target in seconds">
+    </div>
+  </div>
+  <div class="field">
+    <label for="hideMode">Clock while running</label>
+    <select id="hideMode"></select>
+  </div>
+  <div class="field">
+    <label for="feedbackMode">After each go, show the pupil</label>
+    <select id="feedbackMode"></select>
+  </div>
+  <div class="field">
+    <label for="moveAfter">Move to the next pupil</label>
+    <select id="moveAfter"></select>
+  </div>
+  <div class="field">
+    <label for="sessionLabel">Session or group</label>
+    <input id="sessionLabel" type="text" maxlength="40" placeholder="e.g. 5B science" autocomplete="off">
+  </div>
+  <div class="field">
+    <label for="conditionLabel">Condition (optional)</label>
+    <input id="conditionLabel" type="text" maxlength="40" placeholder="e.g. eyes closed, counting aloud" autocomplete="off">
+    <p class="note">Recorded with every go, so you can compare conditions in a fair test.</p>
+  </div>
+  <label class="check" for="practiceMode">
+    <input id="practiceMode" type="checkbox">
+    <span>Practice goes <small>Goes are not recorded while this is ticked.</small></span>
+  </label>
+  <label class="check" for="soundOn">
+    <input id="soundOn" type="checkbox">
+    <span>Beeps</span>
+  </label>
+</aside>
+
+<!-- Data -->
+<section class="data" id="dataScreen" hidden aria-label="Data">
+  <header>
+    <h2>Data</h2>
+    <button class="btn" type="button" id="closeData">Back to the clock</button>
+  </header>
+  <div class="bar">
+    <div class="field">
+      <label for="filterSession">Session</label>
+      <select id="filterSession"></select>
+    </div>
+    <div class="field">
+      <label for="filterPupil">Pupil</label>
+      <select id="filterPupil"></select>
+    </div>
+    <div class="field">
+      <span class="flabel">Show</span>
+      <div class="tabs" role="group" aria-label="Table">
+        <button class="btn" type="button" id="tabGoes" aria-pressed="true">Every go</button>
+        <button class="btn" type="button" id="tabSummary" aria-pressed="false">Summary</button>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn" type="button" id="downloadBtn">Download for Excel (CSV)</button>
+    <button class="btn" type="button" id="copyBtn">Copy table</button>
+    <button class="btn" type="button" id="restoreBtn">Restore from a CSV file</button>
+    <input id="restoreFile" type="file" accept=".csv,text/csv" hidden>
+    <button class="btn warn" type="button" id="wipeBtn" data-armed="false">Delete all data</button>
+  </div>
+  <p class="status" id="dataStatus" role="status"></p>
+  <p class="note" id="tableNote"></p>
+  <div class="table-wrap"><table id="dataTable"></table></div>
+  <textarea id="copyBox" readonly hidden aria-label="Table to copy"></textarea>
+  <p class="note">Data is saved in this browser on this computer only. Download a CSV at the end of each lesson as a backup. A downloaded CSV can be restored here or on another computer.</p>
+</section>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+
+  // ---------- storage (optional; the clock still works without it) ----------
+  const KEY = "stopTheClockLab.";
+  const load = (k, d) => { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+  let storageOk = true;
+  const save = (k, v) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) { storageOk = false; } };
+
+  const HIDE = [
+    ["off", "Shown"], ["1", "Hidden after 1 s"], ["3", "Hidden after 3 s"],
+    ["half", "Hidden halfway"], ["0", "Hidden from the start"]
+  ];
+  const FEEDBACK = [
+    ["full", "Time and how close"], ["time", "Time only"], ["none", "Nothing"]
+  ];
+  const MOVE = [
+    ["manual", "When I choose"], ["1", "After every go"], ["2", "After 2 goes"],
+    ["3", "After 3 goes"], ["5", "After 5 goes"], ["10", "After 10 goes"]
+  ];
+  const label = (list, key) => (list.find(([k]) => k === key) || list[0])[1];
+
+  const settings = Object.assign(
+    { target: 1000, hide: "off", feedback: "full", moveAfter: "manual", session: "", condition: "", practice: false, sound: true },
+    load("settings", {})
+  );
+  if (!(Number.isInteger(settings.target) && settings.target >= 50 && settings.target <= 9900)) settings.target = 1000;
+  for (const [k, list] of [["hide", HIDE], ["feedback", FEEDBACK], ["moveAfter", MOVE]]) {
+    if (!list.some(([key]) => key === settings[k])) settings[k] = list[0][0];
+  }
+  let pupils = load("pupils", []);
+  if (!Array.isArray(pupils)) pupils = [];
+  pupils = pupils.filter(p => typeof p === "string" && p.trim());
+  let current = load("current", 0);
+  if (!(current >= 0 && current < pupils.length)) current = 0;
+  let records = load("records", []);
+  if (!Array.isArray(records)) records = [];
+  const saveSettings = () => save("settings", settings);
+  const savePupils = () => { save("pupils", pupils); save("current", current); };
+  const saveRecords = () => save("records", records);
+
+  // All times are whole centiseconds (1000 = 10.00 s) to avoid rounding surprises.
+  const PRESETS = [100, 300, 500, 1000, 2000, 3000, 6000];
+  const MAX_CS = 99 * 6000 + 5999;
+  const fmtSec = cs => (cs / 100).toFixed(2);
+  const signed = cs => (cs > 0 ? "+" : cs < 0 ? "-" : "") + fmtSec(Math.abs(cs));
+  const pad = n => String(n).padStart(2, "0");
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const hms = d => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const pupilName = () => pupils[current] || "";
+
+  // ---------- seven-segment display: MM : SS . hh ----------
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const SEGS = "abcdefg";
+  const GLYPHS = { "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg", "5": "acdfg",
+                   "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg", "-": "g", " ": "" };
+  const digits = [];
+  let dotEl;
+  (function buildDisplay() {
+    const svg = $("display");
+    const W = 52, H = 92, t = 10, g = 1.4;
+    const L = t / 2, R = W - t / 2, T = t / 2, M = H / 2, B = H - t / 2, k = t / 2;
+    const hz = (x1, x2, y) => `${x1},${y} ${x1 + k},${y - k} ${x2 - k},${y - k} ${x2},${y} ${x2 - k},${y + k} ${x1 + k},${y + k}`;
+    const vt = (x, y1, y2) => `${x},${y1} ${x + k},${y1 + k} ${x + k},${y2 - k} ${x},${y2} ${x - k},${y2 - k} ${x - k},${y1 + k}`;
+    const shapes = {
+      a: hz(L + g, R - g, T), b: vt(R, T + g, M - g), c: vt(R, M + g, B - g), d: hz(L + g, R - g, B),
+      e: vt(L, M + g, B - g), f: vt(L, T + g, M - g), g: hz(L + g, R - g, M)
+    };
+    const root = document.createElementNS(SVGNS, "g");
+    root.setAttribute("transform", "translate(14 4) skewX(-7)");
+    [0, 66, 150, 216, 300, 366].forEach(x => {
+      const grp = document.createElementNS(SVGNS, "g");
+      grp.setAttribute("transform", `translate(${x} 0)`);
+      const d = {};
+      for (const s of SEGS) {
+        const p = document.createElementNS(SVGNS, "polygon");
+        p.setAttribute("points", shapes[s]);
+        p.setAttribute("class", "seg");
+        grp.appendChild(p);
+        d[s] = p;
+      }
+      root.appendChild(grp);
+      digits.push(d);
+    });
+    for (const cy of [H * 0.3, H * 0.7]) {
+      const c = document.createElementNS(SVGNS, "circle");
+      c.setAttribute("cx", 134); c.setAttribute("cy", cy); c.setAttribute("r", 6);
+      c.setAttribute("class", "seg on");
+      root.appendChild(c);
+    }
+    dotEl = document.createElementNS(SVGNS, "circle");
+    dotEl.setAttribute("cx", 284); dotEl.setAttribute("cy", B); dotEl.setAttribute("r", 6);
+    dotEl.setAttribute("class", "seg");
+    root.appendChild(dotEl);
+    svg.appendChild(root);
+  })();
+
+  let shown = "";
+  function show(str, dot = true) {
+    const key = str + dot;
+    if (key === shown) return;
+    shown = key;
+    for (let i = 0; i < 6; i++) {
+      const lit = GLYPHS[str[i]] || "";
+      for (const s of SEGS) digits[i][s].classList.toggle("on", lit.includes(s));
+    }
+    dotEl.classList.toggle("on", dot);
+  }
+  const clockStr = cs => {
+    cs = Math.min(cs, MAX_CS);
+    return pad(Math.floor(cs / 6000)) + pad(Math.floor(cs / 100) % 60) + pad(cs % 100);
+  };
+
+  // ---------- sound ----------
+  let ac = null;
+  function unlockAudio() {
+    if (!settings.sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+    } catch (e) {}
+  }
+  function tone(freq, dur, when = 0, vol = 0.05) {
+    if (!settings.sound || !ac) return;
+    try {
+      const t0 = ac.currentTime + when;
+      const o = ac.createOscillator(), gn = ac.createGain();
+      o.type = "square"; o.frequency.value = freq;
+      gn.gain.setValueAtTime(vol, t0);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(gn).connect(ac.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+
+  // ---------- keep the screen awake during a lesson ----------
+  let wakeLock = null, everPressed = false;
+  async function keepAwake() {
+    try {
+      if (!wakeLock && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      }
+    } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && everPressed) keepAwake();
+  });
+
+  // ---------- records ----------
+  const todayKey = rec => ymd(new Date(rec.at));
+  const sessionKey = rec => todayKey(rec) + "|" + (rec.s || "");
+  const sessionText = key => { const [d, s] = key.split("|"); return s ? `${d} · ${s}` : d; };
+  function goesToday(name) {
+    const key = ymd(new Date()) + "|" + settings.session.trim();
+    return records.filter(r => r.p === name && sessionKey(r) === key).length;
+  }
+  function addRecord(cs) {
+    const rec = {
+      id: newId(), at: Date.now(), s: settings.session.trim(), p: pupilName(),
+      g: goesToday(pupilName()) + 1, t: settings.target, r: cs,
+      c: settings.condition.trim(), h: label(HIDE, settings.hide), f: label(FEEDBACK, settings.feedback), a: false
+    };
+    records.push(rec);
+    saveRecords();
+    return rec;
+  }
+
+  // ---------- game ----------
+  const verdictEl = $("verdict"), hintEl = $("hint"), panelEl = $("panel");
+  let state = "ready", startT = 0, lastPress = -1e9;
+  let turnGoes = 0, nextDue = false, lastRec = null;
+  // Ignore extra presses that arrive too soon (cheap switches "bounce", excited pupils double-tap).
+  const LOCKOUT = { ready: 300, running: 150, stopped: 600 };
+
+  function setState(s) { state = s; document.body.dataset.state = s; }
+  function hideAfterMs() {
+    switch (settings.hide) {
+      case "0": return 0;
+      case "1": return 1000;
+      case "3": return 3000;
+      case "half": return settings.target * 10 / 2;
+      default: return Infinity;
+    }
+  }
+
+  function press(t) {
+    if (!$("dataScreen").hidden) return; // the teacher is looking at the data
+    const now = performance.now();
+    if (!(t > 0) || Math.abs(t - now) > 1000) t = now;
+    if (t - lastPress < LOCKOUT[state]) return;
+    lastPress = t;
+    everPressed = true;
+    unlockAudio();
+    keepAwake();
+    if (state === "ready") start(t);
+    else if (state === "running") stop(t);
+    else reset();
+  }
+
+  function start(t) {
+    startT = t;
+    setState("running");
+    panelEl.classList.remove("perfect");
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren();
+    hintEl.textContent = "Press to stop";
+    tone(880, 0.09);
+  }
+
+  function stop(t) {
+    const cs = Math.min(Math.floor((t - startT) / 10), MAX_CS);
+    setState("stopped");
+    lastRec = settings.practice ? null : addRecord(cs);
+    if (lastRec) turnGoes++;
+    const every = parseInt(settings.moveAfter, 10);
+    nextDue = !!lastRec && every > 0 && pupils.length > 1 && turnGoes >= every;
+    showResult(cs);
+    renderPupil();
+    hintEl.textContent = nextDue ? `Press to reset · next up: ${pupils[(current + 1) % pupils.length]}` : "Press again to reset";
+    refreshOpenPanels();
+  }
+
+  function reset() {
+    setState("ready");
+    panelEl.classList.remove("perfect");
+    if (nextDue) selectPupil((current + 1) % pupils.length);
+    nextDue = false;
+    lastRec = null;
+    show(clockStr(0));
+    showReady();
+  }
+
+  const TIERS = [
+    [0, "Perfect!", "perfect"], [2, "Incredible!", "great"], [5, "So close!", "great"],
+    [10, "Great stop", "good"], [25, "Good try", "good"], [50, "Not bad", "miss"], [Infinity, "Keep practising", "miss"]
+  ];
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function showResult(cs) {
+    const diff = cs - settings.target, off = Math.abs(diff);
+    const parts = [];
+    verdictEl.removeAttribute("data-tier");
+    if (settings.feedback === "none") show("------", false);
+    else show(clockStr(cs));
+
+    if (settings.feedback === "full") {
+      const [, word, tier] = cs >= MAX_CS ? [0, "Time ran out", "miss"] : TIERS.find(([lim]) => off <= lim);
+      parts.push(el("div", "word", word));
+      parts.push(el("div", "diff", diff === 0 ? "Exactly on target" : `${fmtSec(off)} s ${diff > 0 ? "late" : "early"}`));
+      verdictEl.dataset.tier = tier;
+      if (tier === "perfect") {
+        panelEl.classList.add("perfect");
+        [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 0.12 * i, 0.06));
+      } else tone(440, 0.14);
+    } else {
+      tone(440, 0.14);
+    }
+
+    if (lastRec) {
+      if (settings.feedback !== "full") parts.push(el("div", "saved", `Go ${lastRec.g} recorded`));
+      const after = el("div", "after");
+      const flag = el("button", "btn small", "Mark as anomaly");
+      flag.type = "button";
+      flag.setAttribute("aria-pressed", "false");
+      flag.addEventListener("click", () => {
+        const r = records.find(x => x.id === lastRec?.id);
+        if (!r) return;
+        r.a = !r.a;
+        saveRecords();
+        flag.setAttribute("aria-pressed", String(r.a));
+        flag.textContent = r.a ? "Marked as anomaly" : "Mark as anomaly";
+        refreshOpenPanels();
+      });
+      const del = el("button", "btn small warn", "Delete this go");
+      del.type = "button";
+      del.addEventListener("click", () => {
+        if (!lastRec) return;
+        records = records.filter(x => x.id !== lastRec.id);
+        saveRecords();
+        if (turnGoes > 0) turnGoes--;
+        nextDue = false;
+        lastRec = null;
+        after.replaceChildren(el("span", "how", "Go deleted"));
+        renderPupil();
+        hintEl.textContent = "Press again to reset";
+        refreshOpenPanels();
+      });
+      after.append(flag, del);
+      parts.push(after);
+    } else {
+      parts.push(el("div", "practice", "Practice go, not recorded"));
+    }
+    verdictEl.replaceChildren(...parts);
+  }
+
+  function showReady() {
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren(el("div", "how",
+      `Start the clock, then stop it as close to ${fmtSec(settings.target)} seconds as you can.`));
+    const name = pupilName();
+    hintEl.textContent = name ? `${name}, press the button to start` : "Press the button to start";
+  }
+
+  // ---------- current pupil ----------
+  function selectPupil(i) {
+    if (!pupils.length) { current = 0; } else current = ((i % pupils.length) + pupils.length) % pupils.length;
+    turnGoes = 0;
+    nextDue = false;
+    savePupils();
+    renderPupil();
+    renderRoster();
+    if (state === "ready") showReady();
+  }
+  function renderPupil() {
+    const nameEl = $("pupilName"), goEl = $("pupilGo");
+    const name = pupilName();
+    nameEl.textContent = name || "No pupil chosen";
+    nameEl.classList.toggle("none", !name);
+    $("prevPupil").hidden = $("nextPupil").hidden = pupils.length < 2;
+    if (!name) { goEl.textContent = pupils.length ? "" : "Add pupils with the Pupils button"; return; }
+    const every = parseInt(settings.moveAfter, 10);
+    const done = state === "stopped" ? turnGoes : turnGoes + 1;
+    goEl.textContent = settings.practice ? "Practice" :
+      every > 1 ? `Go ${Math.min(done, every)} of ${every}` :
+      `Go ${goesToday(name) + (state === "stopped" ? 0 : 1)} this session`;
+  }
+  $("prevPupil").addEventListener("click", () => selectPupil(current - 1));
+  $("nextPupil").addEventListener("click", () => selectPupil(current + 1));
+
+  // ---------- main loop: draw the clock + read USB game controllers ----------
+  const padPrev = {};
+  function pollPads() {
+    if (!navigator.getGamepads) return;
+    let hit = false;
+    for (const p of navigator.getGamepads()) {
+      if (!p) continue;
+      const now = p.buttons.map(b => b.pressed);
+      const prev = padPrev[p.index];
+      if (prev && now.some((v, i) => v && !prev[i])) hit = true;
+      padPrev[p.index] = now;
+    }
+    if (hit) press(performance.now());
+  }
+  function frame() {
+    pollPads();
+    if (state === "running") {
+      const ms = performance.now() - startT;
+      if (ms >= (MAX_CS + 1) * 10) stop(startT + (MAX_CS + 1) * 10);
+      else if (ms >= hideAfterMs()) show("------", false);
+      else show(clockStr(Math.floor(ms / 10)));
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- the button ----------
+  // Almost any key counts as "the button", so whatever key a USB button,
+  // foot pedal or presentation clicker sends will work without setting anything up.
+  const IGNORED = new Set(["Tab", "Shift", "Control", "Alt", "AltGraph", "Meta", "OS", "CapsLock",
+    "NumLock", "ScrollLock", "ContextMenu", "Fn", "Escape", "Unidentified", "AudioVolumeUp",
+    "AudioVolumeDown", "AudioVolumeMute"]);
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeAll(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!$("dataScreen").hidden) return; // the teacher is using the data screen
+    if (IGNORED.has(e.key) || /^F\d{1,2}$/.test(e.key)) return;
+    const tgt = e.target;
+    if (tgt && tgt.closest && tgt.closest("input, select, textarea")) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    press(e.timeStamp);
+  });
+  $("stage").addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button, input, select, a, label")) return;
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    press(e.timeStamp);
+  });
+  // A mouse click leaves focus on a button; drop it so the next Space press goes to the clock.
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("button");
+    if (b && e.detail > 0) b.blur();
+  });
+
+  // ---------- drawers ----------
+  const drawers = { pupilsDrawer: $("pupilsBtn"), setupDrawer: $("setupBtn") };
+  function openDrawer(id) {
+    for (const [d, btn] of Object.entries(drawers)) {
+      $(d).hidden = d !== id;
+      btn.setAttribute("aria-expanded", String(d === id));
+    }
+    if (id === "pupilsDrawer") renderRoster();
+  }
+  function closeAll() {
+    for (const [d, btn] of Object.entries(drawers)) { $(d).hidden = true; btn.setAttribute("aria-expanded", "false"); }
+    if (!$("dataScreen").hidden) closeData();
+  }
+  for (const [d, btn] of Object.entries(drawers)) {
+    btn.addEventListener("click", () => ($(d).hidden ? openDrawer(d) : closeAll()));
+  }
+  document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeAll));
+
+  // ---------- pupils drawer ----------
+  function renderRoster() {
+    const list = $("roster");
+    $("rosterTitle").textContent = pupils.length ? `Turn order (${pupils.length})` : "Turn order";
+    if (!pupils.length) { list.replaceChildren(el("li", "empty", "No pupils yet.")); return; }
+    list.replaceChildren(...pupils.map((name, i) => {
+      const li = el("li", i === current ? "current" : "");
+      const pick = el("button", "pick", name);
+      pick.type = "button";
+      pick.addEventListener("click", () => selectPupil(i));
+      const n = goesToday(name);
+      const count = el("span", "count", n === 1 ? "1 go" : `${n} goes`);
+      count.title = "Goes recorded in this session today";
+      const rm = el("button", "btn small", "Remove");
+      rm.type = "button";
+      rm.dataset.armed = "false";
+      rm.addEventListener("click", () => {
+        if (rm.dataset.armed !== "true") {
+          rm.dataset.armed = "true"; rm.textContent = "Sure?";
+          setTimeout(() => { rm.dataset.armed = "false"; rm.textContent = "Remove"; }, 3000);
+          return;
+        }
+        const wasCurrent = i === current;
+        pupils.splice(i, 1);
+        if (i < current || current >= pupils.length) current = Math.max(0, current - 1);
+        if (wasCurrent) turnGoes = 0;
+        savePupils(); renderRoster(); renderPupil(); if (state === "ready") showReady();
+      });
+      li.append(pick, count, rm);
+      return li;
+    }));
+  }
+  $("addPupilsBtn").addEventListener("click", () => {
+    const box = $("addPupils");
+    const names = box.value.split(/[\r\n\t]+/).map(s => s.trim()).filter(Boolean);
+    const had = pupils.length;
+    for (const n of names) if (!pupils.includes(n)) pupils.push(n);
+    box.value = "";
+    if (!had && pupils.length) current = 0;
+    savePupils(); renderRoster(); renderPupil(); if (state === "ready") showReady();
+  });
+  $("shuffleBtn").addEventListener("click", () => {
+    for (let i = pupils.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pupils[i], pupils[j]] = [pupils[j], pupils[i]];
+    }
+    current = 0;
+    turnGoes = 0;
+    savePupils(); renderRoster(); renderPupil(); if (state === "ready") showReady();
+  });
+
+  // ---------- set-up drawer ----------
+  const fillSelect = (sel, list, value) => {
+    sel.replaceChildren(...list.map(([k, text]) => { const o = el("option", "", text); o.value = k; return o; }));
+    sel.value = value;
+  };
+  fillSelect($("hideMode"), HIDE, settings.hide);
+  fillSelect($("feedbackMode"), FEEDBACK, settings.feedback);
+  fillSelect($("moveAfter"), MOVE, settings.moveAfter);
+  for (const [id, key] of [["hideMode", "hide"], ["feedbackMode", "feedback"], ["moveAfter", "moveAfter"]]) {
+    $(id).addEventListener("change", () => {
+      settings[key] = $(id).value;
+      if (key === "moveAfter") { turnGoes = 0; nextDue = false; }
+      saveSettings(); renderConditions(); renderPupil();
+    });
+  }
+  for (const [id, key] of [["sessionLabel", "session"], ["conditionLabel", "condition"]]) {
+    const input = $(id);
+    input.value = settings[key];
+    input.addEventListener("input", () => { settings[key] = input.value; saveSettings(); renderConditions(); renderPupil(); });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") input.blur(); });
+  }
+  for (const [id, key] of [["practiceMode", "practice"], ["soundOn", "sound"]]) {
+    const box = $(id);
+    box.checked = !!settings[key];
+    box.addEventListener("change", () => {
+      settings[key] = box.checked; saveSettings(); renderConditions(); renderPupil();
+      if (key === "sound") unlockAudio();
+      box.blur();
+    });
+  }
+
+  const chipsEl = $("chips"), customEl = $("customTarget");
+  const chipBtns = PRESETS.map(cs => {
+    const b = el("button", "btn", String(cs / 100));
+    b.type = "button";
+    b.addEventListener("click", () => setTarget(cs));
+    chipsEl.insertBefore(b, customEl);
+    return { cs, b };
+  });
+  const randomBtn = el("button", "btn", "Random");
+  randomBtn.type = "button";
+  randomBtn.addEventListener("click", () => {
+    let cs;
+    do { cs = (2 + Math.floor(Math.random() * 14)) * 100; } while (cs === settings.target);
+    setTarget(cs);
+  });
+  chipsEl.insertBefore(randomBtn, customEl);
+  function setTarget(cs) {
+    if (state === "running") return;
+    settings.target = cs;
+    saveSettings();
+    $("targetText").textContent = fmtSec(cs);
+    for (const c of chipBtns) c.b.setAttribute("aria-pressed", String(c.cs === cs));
+    customEl.value = PRESETS.includes(cs) ? "" : fmtSec(cs);
+    if (state === "stopped") reset(); else showReady();
+    renderConditions();
+  }
+  customEl.addEventListener("change", () => {
+    const cs = Math.round(parseFloat(customEl.value) * 100);
+    if (cs >= 50 && cs <= 9900) setTarget(cs);
+    else customEl.value = PRESETS.includes(settings.target) ? "" : fmtSec(settings.target);
+    customEl.blur();
+  });
+  customEl.addEventListener("keydown", e => { if (e.key === "Enter") customEl.blur(); });
+
+  // The strip under the clock: what is being recorded with each go. Click to change.
+  function renderConditions() {
+    const strip = $("conditions");
+    const chip = (title, value, cls) => {
+      const b = el("button", "cond" + (cls ? " " + cls : ""));
+      b.type = "button";
+      if (title) b.append(title + " ");
+      b.appendChild(el("b", "", value));
+      b.addEventListener("click", () => openDrawer("setupDrawer"));
+      return b;
+    };
+    const items = [el("span", "lbl", "Recording with")];
+    if (settings.practice) items[0].textContent = "Practice";
+    items.push(chip("Target", fmtSec(settings.target) + " s"));
+    items.push(chip("Clock", label(HIDE, settings.hide).toLowerCase()));
+    items.push(chip("Pupil sees", label(FEEDBACK, settings.feedback).toLowerCase()));
+    if (settings.session.trim()) items.push(chip("Session", settings.session.trim()));
+    if (settings.condition.trim()) items.push(chip("Condition", settings.condition.trim()));
+    if (settings.practice) items.push(chip("", "Not recording", "practice"));
+    if (!storageOk) items.push(el("span", "lbl", "This browser is not saving data. Download the CSV before closing."));
+    strip.replaceChildren(...items);
+  }
+
+  // ---------- data screen ----------
+  let tab = "goes";
+  const dataEl = $("dataScreen"), statusEl = $("dataStatus");
+  function setStatus(msg, err) { statusEl.textContent = msg; statusEl.classList.toggle("err", !!err); }
+  function openData() { closeAll(); dataEl.hidden = false; setStatus(""); $("copyBox").hidden = true; renderData(); }
+  function closeData() { dataEl.hidden = true; disarmWipe(); }
+  $("dataBtn").addEventListener("click", openData);
+  $("closeData").addEventListener("click", closeData);
+  function refreshOpenPanels() {
+    if (!dataEl.hidden) renderData();
+    if (!$("pupilsDrawer").hidden) renderRoster();
+  }
+
+  function refillFilter(sel, options, allText) {
+    const was = sel.value;
+    sel.replaceChildren(el("option", "", allText), ...options.map(([v, t]) => { const o = el("option", "", t); o.value = v; return o; }));
+    sel.firstChild.value = "";
+    sel.value = options.some(([v]) => v === was) ? was : "";
+  }
+  const NO_NAME = "__no_name__";
+  function filtered() {
+    const s = $("filterSession").value, p = $("filterPupil").value;
+    return records.filter(r => (!s || sessionKey(r) === s) && (!p || r.p === (p === NO_NAME ? "" : p)));
+  }
+
+  const GO_COLS = [
+    ["Date", r => todayKey(r)],
+    ["Time", r => hms(new Date(r.at))],
+    ["Session", r => r.s],
+    ["Pupil", r => r.p],
+    ["Go", r => r.g, "num"],
+    ["Target (s)", r => fmtSec(r.t), "num"],
+    ["Result (s)", r => fmtSec(r.r), "num res"],
+    ["Difference (s)", r => signed(r.r - r.t), "num"],
+    ["Distance from target (s)", r => fmtSec(Math.abs(r.r - r.t)), "num"],
+    ["Early or late", r => r.r === r.t ? "On target" : r.r > r.t ? "Late" : "Early"],
+    ["Condition", r => r.c],
+    ["Clock while running", r => r.h],
+    ["Pupil was shown", r => r.f],
+    ["Anomaly", r => r.a ? "Yes" : "No"],
+    ["ID", r => r.id]
+  ];
+  // Columns shown on screen (the CSV has them all).
+  const SCREEN_HIDE = new Set(["Distance from target (s)", "Early or late", "ID", "Anomaly"]);
+
+  const median = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const f2 = cs => (cs / 100).toFixed(2);
+  function summaryRows(list) {
+    const groups = new Map();
+    for (const r of list) {
+      if (r.a) continue;
+      const k = JSON.stringify([r.p, r.t, r.c]);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    return [...groups.values()].map(rs => {
+      const res = rs.map(r => r.r), dist = rs.map(r => Math.abs(r.r - r.t));
+      const lo = Math.min(...res), hi = Math.max(...res);
+      return {
+        Pupil: rs[0].p, "Target (s)": f2(rs[0].t), Condition: rs[0].c, Goes: rs.length,
+        "Mean (s)": f2(mean(res)), "Median (s)": f2(median(res)),
+        "Lowest (s)": f2(lo), "Highest (s)": f2(hi), "Range (s)": f2(hi - lo),
+        "Mean distance from target (s)": f2(mean(dist)), "Closest (s)": f2(Math.min(...dist))
+      };
+    }).sort((a, b) => a.Pupil.localeCompare(b.Pupil) || a["Target (s)"] - b["Target (s)"] || a.Condition.localeCompare(b.Condition));
+  }
+  const SUM_COLS = ["Pupil", "Target (s)", "Condition", "Goes", "Mean (s)", "Median (s)", "Lowest (s)",
+    "Highest (s)", "Range (s)", "Mean distance from target (s)", "Closest (s)"];
+
+  // The table as plain rows, exactly as it goes to Excel.
+  function exportTable() {
+    const list = filtered();
+    if (tab === "goes") {
+      const rows = [...list].sort((a, b) => a.at - b.at).map(r => GO_COLS.map(([, f]) => f(r)));
+      return { head: GO_COLS.map(([h]) => h), rows };
+    }
+    const rows = summaryRows(list).map(o => SUM_COLS.map(c => o[c]));
+    return { head: SUM_COLS, rows };
+  }
+
+  function renderData() {
+    const sessions = [...new Set(records.map(sessionKey))].sort().reverse();
+    refillFilter($("filterSession"), sessions.map(k => [k, sessionText(k)]), "All sessions");
+    const names = [...new Set(records.map(r => r.p))].sort((a, b) => a.localeCompare(b));
+    refillFilter($("filterPupil"), names.map(n => [n || NO_NAME, n || "(no name)"]), "All pupils");
+    $("tabGoes").setAttribute("aria-pressed", String(tab === "goes"));
+    $("tabSummary").setAttribute("aria-pressed", String(tab === "summary"));
+
+    const list = filtered();
+    const table = $("dataTable");
+    const anomalies = list.filter(r => r.a).length;
+    const th = (text, cls) => { const e = el("th", cls || "", text); e.scope = "col"; return e; };
+
+    if (tab === "summary") {
+      $("tableNote").textContent = `One row per pupil, target and condition. ` +
+        (anomalies ? `${anomalies} ${anomalies === 1 ? "go marked as an anomaly is" : "goes marked as anomalies are"} left out.` : "Goes marked as anomalies are left out.");
+      const rows = summaryRows(list);
+      const head = el("tr");
+      SUM_COLS.forEach((c, i) => head.appendChild(th(c, i > 2 ? "num" : "")));
+      const body = rows.length ? rows.map(o => {
+        const tr = el("tr");
+        SUM_COLS.forEach((c, i) => tr.appendChild(el("td", i > 2 ? "num" : "", String(o[c] === "" ? "–" : o[c]))));
+        return tr;
+      }) : [emptyRow(SUM_COLS.length)];
+      table.replaceChildren(el("thead"), el("tbody"));
+      table.tHead.appendChild(head);
+      table.tBodies[0].append(...body);
+      return;
+    }
+
+    $("tableNote").textContent = `${list.length} ${list.length === 1 ? "go" : "goes"}, newest first` +
+      (anomalies ? `, ${anomalies} marked as ${anomalies === 1 ? "an anomaly" : "anomalies"}.` : ".") +
+      " Tick Anomaly to leave a go out of the summary without deleting it.";
+    const cols = GO_COLS.filter(([h]) => !SCREEN_HIDE.has(h));
+    const head = el("tr");
+    cols.forEach(([h, , cls]) => head.appendChild(th(h.replace(" (s)", ""), cls && cls.includes("num") ? "num" : "")));
+    head.appendChild(th("Anomaly"));
+    head.appendChild(th(""));
+    const sorted = [...list].sort((a, b) => b.at - a.at);
+    const body = sorted.length ? sorted.map(r => {
+      const tr = el("tr", r.a ? "anomaly" : "");
+      cols.forEach(([, f, cls]) => tr.appendChild(el("td", cls || "", String(f(r) === "" ? "–" : f(r)))));
+      const flagTd = el("td", "flag");
+      const lab = el("label");
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = !!r.a;
+      box.setAttribute("aria-label", `Mark ${r.p || "this"} go ${r.g} as an anomaly`);
+      box.addEventListener("change", () => { r.a = box.checked; saveRecords(); renderData(); });
+      lab.append(box, r.a ? "Anomaly" : "");
+      flagTd.appendChild(lab);
+      const delTd = el("td");
+      const del = el("button", "btn small warn", "Delete");
+      del.type = "button";
+      del.dataset.armed = "false";
+      del.addEventListener("click", () => {
+        if (del.dataset.armed !== "true") {
+          del.dataset.armed = "true"; del.textContent = "Sure?";
+          setTimeout(() => { del.dataset.armed = "false"; del.textContent = "Delete"; }, 3000);
+          return;
+        }
+        records = records.filter(x => x.id !== r.id);
+        saveRecords();
+        setStatus(`Deleted ${r.p || "a"} go ${r.g} (${fmtSec(r.r)} s).`);
+        renderData();
+      });
+      delTd.appendChild(del);
+      tr.append(flagTd, delTd);
+      return tr;
+    }) : [emptyRow(cols.length + 2)];
+    table.replaceChildren(el("thead"), el("tbody"));
+    table.tHead.appendChild(head);
+    table.tBodies[0].append(...body);
+  }
+  function emptyRow(span) {
+    const tr = el("tr");
+    const td = el("td", "empty", records.length ? "No goes match these filters." :
+      "No goes recorded yet. Add pupils, close this screen and press the button to start.");
+    td.colSpan = span;
+    tr.appendChild(td);
+    return tr;
+  }
+  $("filterSession").addEventListener("change", renderData);
+  $("filterPupil").addEventListener("change", renderData);
+  $("tabGoes").addEventListener("click", () => { tab = "goes"; renderData(); });
+  $("tabSummary").addEventListener("click", () => { tab = "summary"; renderData(); });
+
+  // ---------- CSV in and out ----------
+  const csvCell = v => {
+    let s = String(v ?? "");
+    if (/^[=+\-@]/.test(s) && isNaN(s)) s = "'" + s; // stop Excel treating a name as a formula
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  function toCSV({ head, rows }) {
+    return "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  }
+  function toTSV({ head, rows }) {
+    return [head, ...rows].map(r => r.map(v => String(v ?? "").replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+  }
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, "");
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+        else cell += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); rows.push(row); row = []; cell = "";
+      } else cell += ch;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ""));
+  }
+
+  async function offerFile(filename, text) {
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    // Inside claude.ai the page asks the viewer to save; opened as a file, a normal download.
+    try {
+      if (window.claude && typeof window.claude.use === "function") {
+        const dl = await window.claude.use("downloads");
+        if (dl) { await dl.save({ filename, data: blob }); return "saved"; }
+      }
+    } catch (e) {
+      if (e && e.code === "declined") return "declined";
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    return "saved";
+  }
+
+  $("downloadBtn").addEventListener("click", async () => {
+    const t = exportTable();
+    if (!t.rows.length) { setStatus("There is nothing in this table to download yet.", true); return; }
+    const name = `stop-the-clock-${tab === "goes" ? "goes" : "summary"}-${ymd(new Date())}.csv`;
+    const res = await offerFile(name, toCSV(t));
+    setStatus(res === "declined" ? "Download cancelled." : `Downloaded ${name}. Open it in Excel.`);
+  });
+
+  $("copyBtn").addEventListener("click", () => {
+    const t = exportTable();
+    if (!t.rows.length) { setStatus("There is nothing in this table to copy yet.", true); return; }
+    const text = toTSV(t);
+    const box = $("copyBox");
+    const fallback = () => {
+      box.value = text; box.hidden = false; box.focus(); box.select();
+      setStatus("Press Ctrl+C (or Cmd+C) to copy the selected table, then paste it into Excel.");
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        box.hidden = true;
+        setStatus(`Copied ${t.rows.length} rows. Click cell A1 in Excel and paste.`);
+      }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  $("restoreBtn").addEventListener("click", () => $("restoreFile").click());
+  $("restoreFile").addEventListener("change", async () => {
+    const file = $("restoreFile").files[0];
+    $("restoreFile").value = "";
+    if (!file) return;
+    try {
+      const rows = parseCSV(await file.text());
+      const head = rows.shift() || [];
+      const col = name => head.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
+      const need = ["Date", "Time", "Pupil", "Target (s)", "Result (s)"];
+      const missing = need.filter(n => col(n) < 0);
+      if (missing.length) {
+        setStatus(`This file is not a Stop the Clock "Every go" download (missing ${missing.join(", ")}).`, true);
+        return;
+      }
+      const idx = Object.fromEntries(GO_COLS.map(([h]) => [h, col(h)]));
+      const get = (r, h) => (idx[h] >= 0 ? (r[idx[h]] || "").trim().replace(/^'(?=[=+\-@])/, "") : "");
+      const have = new Set(records.map(r => r.id));
+      let added = 0, skipped = 0, bad = 0;
+      for (const r of rows) {
+        // 2026-11-04 as downloaded, or 04/11/2026 if the file was re-saved from Excel
+        let [y, mo, d] = get(r, "Date").split(/[-/.]/).map(Number);
+        if (d > 31) [y, mo, d] = [d, mo, y];
+        const [hh, mi, ss] = get(r, "Time").split(":").map(Number);
+        const t = Math.round(parseFloat(get(r, "Target (s)")) * 100);
+        const res = Math.round(parseFloat(get(r, "Result (s)")) * 100);
+        const at = new Date(y, mo - 1, d, hh || 0, mi || 0, ss || 0).getTime();
+        if (!(t > 0) || !(res >= 0) || isNaN(at)) { bad++; continue; }
+        const id = get(r, "ID") || `${at}-${get(r, "Pupil")}-${res}`;
+        if (have.has(id)) { skipped++; continue; }
+        have.add(id);
+        records.push({
+          id, at, s: get(r, "Session"), p: get(r, "Pupil"), g: parseInt(get(r, "Go"), 10) || 1, t, r: res,
+          c: get(r, "Condition"), h: get(r, "Clock while running"), f: get(r, "Pupil was shown"),
+          a: /^y/i.test(get(r, "Anomaly"))
+        });
+        added++;
+      }
+      records.sort((a, b) => a.at - b.at);
+      saveRecords();
+      renderData();
+      setStatus(`Restored ${added} ${added === 1 ? "go" : "goes"}` +
+        (skipped ? `, skipped ${skipped} already here` : "") + (bad ? `, ${bad} rows could not be read` : "") + ".");
+    } catch (e) {
+      setStatus("That file could not be read. Choose a CSV downloaded from Every go.", true);
+    }
+  });
+
+  const wipeBtn = $("wipeBtn");
+  function disarmWipe() { wipeBtn.dataset.armed = "false"; wipeBtn.textContent = "Delete all data"; }
+  wipeBtn.addEventListener("click", () => {
+    if (wipeBtn.dataset.armed === "true") {
+      const n = records.length;
+      records = [];
+      saveRecords();
+      disarmWipe();
+      renderData();
+      setStatus(`Deleted all ${n} goes.`);
+      return;
+    }
+    wipeBtn.dataset.armed = "true";
+    wipeBtn.textContent = `Click again to delete all ${records.length} goes`;
+    setTimeout(disarmWipe, 4000);
+  });
+
+  // ---------- full screen ----------
+  const fsBtn = $("fsBtn");
+  fsBtn.addEventListener("click", () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) {}
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fsBtn.textContent = document.fullscreenElement ? "Exit full screen" : "Full screen";
+  });
+  if (!document.documentElement.requestFullscreen) fsBtn.hidden = true;
+
+  // ---------- boot ----------
+  const topBar = document.querySelector(".top");
+  const placeDrawers = () => document.documentElement.style.setProperty("--top-h", Math.ceil(topBar.getBoundingClientRect().bottom + 6) + "px");
+  window.addEventListener("resize", placeDrawers);
+  placeDrawers();
+  show(clockStr(0));
+  setTarget(settings.target);
+  renderPupil();
+  renderConditions();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

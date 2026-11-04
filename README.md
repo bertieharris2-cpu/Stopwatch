@@ -57,3 +57,45 @@ You want something that plugs into the computer and types a key, or appears as a
 Keys that are deliberately ignored: Tab, Esc (closes the scores panel), F1–F12, and anything held with
 Ctrl/Alt/Cmd. Key presses are also ignored while you are typing in the name or target box,
 so press Enter after typing.
+
+---
+
+# Stop the Clock Lab (version 2)
+
+`lab.html` is a second version for collecting data from a whole class. The original `index.html` is unchanged.
+
+**Pupils.** Paste a class list into *Pupils*, one name per line (initials or pupil numbers work too).
+The current pupil's name is shown above the clock. Use ◀ ▶ or click a name to change turn.
+*Shuffle the order* mixes up the turn order. The list shows how many goes each pupil has had in this session.
+
+**Set-up.** Everything chosen here is saved with every go:
+
+- **Target time**
+- **Clock while running:** shown, or hidden after 1 s, 3 s, halfway, or from the start
+- **After each go, show the pupil:** *Time and how close*, *Time only*, or *Nothing*. With *Nothing*
+  the clock stays as `--:--.--` and the screen just says "Go 3 recorded".
+- **Move to the next pupil:** when you choose, or automatically after 1, 2, 3, 5 or 10 goes
+- **Session or group**, e.g. "5B science"
+- **Condition**, e.g. "eyes closed" or "counting aloud", for comparing conditions in a fair test
+- **Practice goes:** while this is ticked, goes are not recorded
+
+The strip under the clock always shows what is being recorded.
+
+**After each go** you can click *Mark as anomaly* (for example if the button was pressed by accident)
+or *Delete this go*.
+
+**Data** shows every go, newest first, with a filter for session and pupil.
+
+- Tick **Anomaly** to leave a go out of the summary without deleting it. Click **Delete** twice to remove it.
+- **Summary** shows one row per pupil, target and condition: number of goes, mean, median, lowest,
+  highest, range, mean distance from the target and closest go. Anomalies are left out.
+- **Download for Excel (CSV)** downloads whichever table is showing, with the current filters.
+  The "Every go" file has one row per go, with these columns: Date, Time, Session, Pupil, Go, Target,
+  Result, Difference (+ late, − early), Distance from target, Early or late, Condition,
+  Clock while running, Pupil was shown, Anomaly, ID.
+- **Copy table** copies it so you can paste straight into Excel.
+- **Restore from a CSV file** loads an "Every go" download back in, for example on another computer.
+  Goes that are already there are skipped.
+
+Data is kept in that browser on that computer only. Nothing is sent over the internet.
+Download a CSV at the end of each lesson as a backup, because clearing the browser's history can delete it.
