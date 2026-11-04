@@ -71,6 +71,9 @@ The current pupil's name is shown above the clock. Use ◀ ▶ or click a name t
 **Set-up.** Everything chosen here is saved with every go:
 
 - **Target time**
+- **Start the clock:** when the pupil presses, or after a 3, 2, 1 (or 5 second) countdown. With a countdown
+  the clock beeps each second and starts itself exactly on GO, so the pupil only presses once, to stop it.
+  Pressing before GO shows "Too soon!" and nothing is recorded.
 - **Clock while running:** shown, or hidden after 1 s, 3 s, halfway, or from the start
 - **After each go, show the pupil:** *Time and how close*, *Time only*, or *Nothing*. With *Nothing*
   the clock stays as `--:--.--` and the screen just says "Go 3 recorded".
@@ -91,7 +94,7 @@ or *Delete this go*.
   highest, range, mean distance from the target and closest go. Anomalies are left out.
 - **Download for Excel (CSV)** downloads whichever table is showing, with the current filters.
   The "Every go" file has one row per go, with these columns: Date, Time, Session, Pupil, Go, Target,
-  Result, Difference (+ late, − early), Distance from target, Early or late, Condition,
+  Result, Difference (+ late, − early), Distance from target, Early or late, Condition, Start,
   Clock while running, Pupil was shown, Anomaly, ID.
 - **Copy table** copies it so you can paste straight into Excel.
 - **Restore from a CSV file** loads an "Every go" download back in, for example on another computer.

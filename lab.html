@@ -137,6 +137,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .verdict .how { color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); max-width: 40ch; text-wrap: balance; }
 .verdict .saved { color: var(--led); font-family: var(--font-label); letter-spacing: 0.06em; font-size: clamp(1.1rem, 3vw, 1.8rem); }
 .verdict .practice { color: var(--amber); font-family: var(--font-label); letter-spacing: 0.06em; font-size: clamp(1.1rem, 3vw, 1.6rem); }
+.verdict .count { color: var(--led); text-shadow: 0 0 18px var(--led-glow); }
+.verdict .false-start { color: var(--amber); }
 .verdict .after { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
 .verdict[data-tier="perfect"] .word, .verdict[data-tier="great"] .word { color: var(--led); text-shadow: 0 0 18px var(--led-glow); }
 .verdict[data-tier="good"] .word { color: var(--ink); }
@@ -166,6 +168,9 @@ body[data-state="ready"] .hint { animation: pulse 1.6s ease-in-out infinite; }
 .cond b { font-weight: 700; color: var(--led); }
 .cond.practice { border-color: var(--amber); color: var(--amber); }
 body[data-state="running"] .conditions,
+body[data-state="countdown"] .conditions,
+body[data-state="countdown"] .top-actions,
+body[data-state="countdown"] .pupil-line .btn,
 body[data-state="running"] .top-actions,
 body[data-state="running"] .pupil-line .btn { opacity: 0.12; pointer-events: none; }
 
@@ -317,6 +322,11 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     </div>
   </div>
   <div class="field">
+    <label for="startMode">Start the clock</label>
+    <select id="startMode"></select>
+    <p class="note">With a countdown the clock starts itself on GO, so the pupil only presses once, to stop it.</p>
+  </div>
+  <div class="field">
     <label for="hideMode">Clock while running</label>
     <select id="hideMode"></select>
   </div>
@@ -402,6 +412,9 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   const FEEDBACK = [
     ["full", "Time and how close"], ["time", "Time only"], ["none", "Nothing"]
   ];
+  const START = [
+    ["press", "When the pupil presses"], ["3", "After a 3, 2, 1 countdown"], ["5", "After a 5 second countdown"]
+  ];
   const MOVE = [
     ["manual", "When I choose"], ["1", "After every go"], ["2", "After 2 goes"],
     ["3", "After 3 goes"], ["5", "After 5 goes"], ["10", "After 10 goes"]
@@ -409,11 +422,11 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   const label = (list, key) => (list.find(([k]) => k === key) || list[0])[1];
 
   const settings = Object.assign(
-    { target: 1000, hide: "off", feedback: "full", moveAfter: "manual", session: "", condition: "", practice: false, sound: true },
+    { target: 1000, hide: "off", feedback: "full", start: "press", moveAfter: "manual", session: "", condition: "", practice: false, sound: true },
     load("settings", {})
   );
   if (!(Number.isInteger(settings.target) && settings.target >= 50 && settings.target <= 9900)) settings.target = 1000;
-  for (const [k, list] of [["hide", HIDE], ["feedback", FEEDBACK], ["moveAfter", MOVE]]) {
+  for (const [k, list] of [["hide", HIDE], ["feedback", FEEDBACK], ["start", START], ["moveAfter", MOVE]]) {
     if (!list.some(([key]) => key === settings[k])) settings[k] = list[0][0];
   }
   let pupils = load("pupils", []);
@@ -548,7 +561,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     const rec = {
       id: newId(), at: Date.now(), s: settings.session.trim(), p: pupilName(),
       g: goesToday(pupilName()) + 1, t: settings.target, r: cs,
-      c: settings.condition.trim(), h: label(HIDE, settings.hide), f: label(FEEDBACK, settings.feedback), a: false
+      c: settings.condition.trim(), h: label(HIDE, settings.hide), f: label(FEEDBACK, settings.feedback),
+      st: label(START, startMode), a: false
     };
     records.push(rec);
     saveRecords();
@@ -559,8 +573,9 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   const verdictEl = $("verdict"), hintEl = $("hint"), panelEl = $("panel");
   let state = "ready", startT = 0, lastPress = -1e9;
   let turnGoes = 0, nextDue = false, lastRec = null;
+  let countFrom = 0, countStart = 0, countShown = -1, startMode = "press", goTimer = 0;
   // Ignore extra presses that arrive too soon (cheap switches "bounce", excited pupils double-tap).
-  const LOCKOUT = { ready: 300, running: 150, stopped: 600 };
+  const LOCKOUT = { ready: 300, countdown: 300, running: 150, stopped: 600 };
 
   function setState(s) { state = s; document.body.dataset.state = s; }
   function hideAfterMs() {
@@ -582,23 +597,68 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     everPressed = true;
     unlockAudio();
     keepAwake();
-    if (state === "ready") start(t);
+    if (state === "ready") {
+      startMode = settings.start;
+      if (startMode === "press") start(t);
+      else beginCountdown(t, parseInt(startMode, 10));
+    }
+    else if (state === "countdown") falseStart();
     else if (state === "running") stop(t);
     else reset();
   }
 
-  function start(t) {
+  // Countdown: the clock shows 00:03.00, 00:02.00, 00:01.00 with a beep each second,
+  // then starts itself exactly on GO.
+  function beginCountdown(t, n) {
+    countFrom = n;
+    countStart = t;
+    countShown = -1;
+    setState("countdown");
+    panelEl.classList.remove("perfect");
+    hintEl.textContent = "Get ready…";
+    tickCountdown(performance.now());
+  }
+  function tickCountdown(now) {
+    const ms = now - countStart;
+    if (ms >= countFrom * 1000) { start(countStart + countFrom * 1000, true); return; }
+    const left = countFrom - Math.floor(ms / 1000);
+    if (left === countShown) return;
+    countShown = left;
+    show(clockStr(left * 100));
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren(el("div", "word count", String(left)));
+    tone(440, 0.12);
+  }
+  function falseStart() {
+    setState("ready");
+    show(clockStr(0));
+    verdictEl.removeAttribute("data-tier");
+    verdictEl.replaceChildren(el("div", "word false-start", "Too soon!"),
+      el("div", "diff", "Wait for GO, then press to stop. That go was not recorded."));
+    hintEl.textContent = "Press the button to try again";
+    tone(180, 0.3);
+  }
+
+  function start(t, fromCountdown) {
     startT = t;
     setState("running");
     panelEl.classList.remove("perfect");
     verdictEl.removeAttribute("data-tier");
-    verdictEl.replaceChildren();
+    clearTimeout(goTimer);
+    if (fromCountdown) {
+      verdictEl.replaceChildren(el("div", "word count", "GO!"));
+      goTimer = setTimeout(() => { if (state === "running") verdictEl.replaceChildren(); }, 800);
+      tone(880, 0.3);
+    } else {
+      verdictEl.replaceChildren();
+      tone(880, 0.09);
+    }
     hintEl.textContent = "Press to stop";
-    tone(880, 0.09);
   }
 
   function stop(t) {
     const cs = Math.min(Math.floor((t - startT) / 10), MAX_CS);
+    clearTimeout(goTimer);
     setState("stopped");
     lastRec = settings.practice ? null : addRecord(cs);
     if (lastRec) turnGoes++;
@@ -739,6 +799,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   }
   function frame() {
     pollPads();
+    if (state === "countdown") tickCountdown(performance.now());
     if (state === "running") {
       const ms = performance.now() - startT;
       if (ms >= (MAX_CS + 1) * 10) stop(startT + (MAX_CS + 1) * 10);
@@ -854,7 +915,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   fillSelect($("hideMode"), HIDE, settings.hide);
   fillSelect($("feedbackMode"), FEEDBACK, settings.feedback);
   fillSelect($("moveAfter"), MOVE, settings.moveAfter);
-  for (const [id, key] of [["hideMode", "hide"], ["feedbackMode", "feedback"], ["moveAfter", "moveAfter"]]) {
+  fillSelect($("startMode"), START, settings.start);
+  for (const [id, key] of [["hideMode", "hide"], ["feedbackMode", "feedback"], ["startMode", "start"], ["moveAfter", "moveAfter"]]) {
     $(id).addEventListener("change", () => {
       settings[key] = $(id).value;
       if (key === "moveAfter") { turnGoes = 0; nextDue = false; }
@@ -926,6 +988,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     if (settings.practice) items[0].textContent = "Practice";
     items.push(chip("Target", fmtSec(settings.target) + " s"));
     items.push(chip("Clock", label(HIDE, settings.hide).toLowerCase()));
+    items.push(chip("Start", settings.start === "press" ? "on press" : `${settings.start} s countdown`));
     items.push(chip("Pupil sees", label(FEEDBACK, settings.feedback).toLowerCase()));
     if (settings.session.trim()) items.push(chip("Session", settings.session.trim()));
     if (settings.condition.trim()) items.push(chip("Condition", settings.condition.trim()));
@@ -971,6 +1034,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     ["Distance from target (s)", r => fmtSec(Math.abs(r.r - r.t)), "num"],
     ["Early or late", r => r.r === r.t ? "On target" : r.r > r.t ? "Late" : "Early"],
     ["Condition", r => r.c],
+    ["Start", r => r.st || ""],
     ["Clock while running", r => r.h],
     ["Pupil was shown", r => r.f],
     ["Anomaly", r => r.a ? "Yes" : "No"],
@@ -1211,7 +1275,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
         have.add(id);
         records.push({
           id, at, s: get(r, "Session"), p: get(r, "Pupil"), g: parseInt(get(r, "Go"), 10) || 1, t, r: res,
-          c: get(r, "Condition"), h: get(r, "Clock while running"), f: get(r, "Pupil was shown"),
+          c: get(r, "Condition"), h: get(r, "Clock while running"), f: get(r, "Pupil was shown"), st: get(r, "Start"),
           a: /^y/i.test(get(r, "Anomaly"))
         });
         added++;
