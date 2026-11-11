@@ -260,6 +260,19 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
 .wgo .answer input { width: 7ch; font-size: 1.3rem; font-variant-numeric: tabular-nums; padding: 8px 10px; }
 .wgo .answer .btn { min-height: 44px; }
 .wgo .working { width: 100%; box-sizing: border-box; }
+/* whiteboard: white squared paper, square corners */
+.board-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.board-tools .swatch { width: 44px; height: 44px; border: 3px solid #fff; border-radius: 0; box-shadow: 0 0 0 2px var(--rim); cursor: pointer; padding: 0; }
+.board-tools .swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--led); }
+.board-tools .btn { min-height: 44px; }
+.board-tools .btn[data-armed="true"] { border-color: var(--amber); color: var(--amber); }
+.board {
+  position: relative; width: 100%; max-width: 100%; aspect-ratio: 5 / 2; overflow: hidden;
+  background-color: #fff; border: 2px solid var(--rim);
+  background-image: linear-gradient(to right, #dce6ee 1px, transparent 1px), linear-gradient(to bottom, #dce6ee 1px, transparent 1px);
+  background-size: calc(100% / 25) calc(100% / 10);
+}
+.board canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 .wgo .fb { margin: 0; min-height: 1.4em; font-size: 1.05rem; }
 .wgo .fb.yes { color: var(--led); }
 .wgo .fb.again { color: var(--ink); }
@@ -499,6 +512,14 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   const saveSettings = () => save("settings", settings);
   const savePupils = () => { save("pupils", pupils); save("current", current); };
   const saveRecords = () => save("records", records);
+  // Whiteboard drawings for Work it out, by go id. Kept apart from the records so the CSV stays small.
+  let boards = load("boards", {});
+  if (!boards || typeof boards !== "object") boards = {};
+  const saveBoards = () => {
+    const ids = new Set(records.map(r => r.id));
+    for (const k of Object.keys(boards)) if (!ids.has(k) || !boards[k].length) delete boards[k];
+    save("boards", boards);
+  };
 
   // All times are whole centiseconds (1000 = 10.00 s) to avoid rounding surprises.
   const PRESETS = [100, 300, 500, 1000, 2000, 3000, 6000];
@@ -1372,6 +1393,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
       const n = records.length;
       records = [];
       saveRecords();
+      boards = {};
+      saveBoards();
       disarmWipe();
       renderData();
       setStatus(`Deleted all ${n} goes.`);
@@ -1461,6 +1484,129 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     }));
   }
 
+  // ---------- whiteboard (adapted from the learning-interactive working pad) ----------
+  const PENS = [["Black", "#1e2a36"], ["Blue", "#2364d2"], ["Red", "#d62d20"], ["Green", "#16944b"]];
+  const BOARD_W = 1250, BOARD_H = 500, BOARD_COLS = 25;
+  const boardObserver = new ResizeObserver(entries => entries.forEach(en => en.target._fit && en.target._fit()));
+  function makeBoard(id) {
+    const strokes = boards[id] || (boards[id] = []);
+    const wrap = el("div", "board-wrap field");
+    const tools = el("div", "board-tools");
+    const area = el("div", "board");
+    const cv = el("canvas");
+    cv.setAttribute("aria-label", "Whiteboard: draw or write your working here");
+    area.appendChild(cv);
+    const ctx = cv.getContext("2d");
+    let colour = PENS[0][1], erase = false, sawPen = false, cur = null, w = 1, h = 1, armed = false;
+
+    const swatches = PENS.map(([name, c]) => {
+      const b = el("button", "swatch");
+      b.type = "button";
+      b.style.background = c;
+      b.title = name + " pen";
+      b.setAttribute("aria-label", name + " pen");
+      b.addEventListener("click", () => { colour = c; erase = false; sync(); });
+      return b;
+    });
+    const mk = (text, fn) => { const b = el("button", "btn", text); b.type = "button"; b.addEventListener("click", fn); return b; };
+    const rubber = mk("Rubber", () => { erase = true; sync(); });
+    const undo = mk("Undo", () => { strokes.pop(); redraw(); saveBoards(); });
+    const clear = mk("Clear", () => {
+      if (!strokes.length) return;
+      if (!armed) { armed = true; clear.dataset.armed = "true"; clear.textContent = "Tap again to clear"; setTimeout(disarm, 3000); return; }
+      strokes.length = 0; redraw(); disarm(); saveBoards();
+    });
+    function disarm() { armed = false; clear.dataset.armed = "false"; clear.textContent = "Clear"; }
+    function sync() {
+      swatches.forEach((b, i) => b.setAttribute("aria-pressed", String(!erase && PENS[i][1] === colour)));
+      rubber.setAttribute("aria-pressed", String(erase));
+    }
+    tools.append(...swatches, rubber, undo, clear);
+    sync();
+
+    const lw = s => (s.e ? 0.035 : 0.006) * w;
+    function drawStroke(s) {
+      const p = s.p;
+      ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+      ctx.strokeStyle = s.c; ctx.lineWidth = lw(s); ctx.lineCap = ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(p[0][0] * w, p[0][1] * h);
+      if (p.length === 1) ctx.lineTo(p[0][0] * w + 0.1, p[0][1] * h);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0] * w, p[i][1] * h);
+      ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function redraw() { ctx.clearRect(0, 0, w, h); strokes.forEach(drawStroke); }
+    function fit() {
+      const r = cv.getBoundingClientRect();
+      if (!r.width) return;
+      const dpr = window.devicePixelRatio || 1;
+      w = r.width; h = r.height;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redraw();
+    }
+    area._fit = fit;
+    boardObserver.observe(area);
+    const round = v => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+    const pt = e => { const r = cv.getBoundingClientRect(); return [round((e.clientX - r.left) / r.width), round((e.clientY - r.top) / r.height)]; };
+    cv.addEventListener("pointerdown", e => {
+      if (e.pointerType === "pen") sawPen = true;
+      if (sawPen && e.pointerType === "touch") return; // palm rejection once a stylus is used
+      e.preventDefault();
+      cv.setPointerCapture(e.pointerId);
+      cur = { c: colour, e: erase, p: [pt(e)] };
+      strokes.push(cur);
+      drawStroke(cur);
+    });
+    cv.addEventListener("pointermove", e => {
+      if (!cur) return;
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      for (const ev of evs) cur.p.push(pt(ev));
+      redraw();
+    });
+    const end = () => { if (cur) { cur = null; saveBoards(); } };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+
+    const lab = el("span", "flabel", "Whiteboard");
+    wrap.append(lab, tools, area);
+    return wrap;
+  }
+
+  // The drawing as a picture for the record: white squared paper, cropped to the ink.
+  function boardImage(list) {
+    if (!list || !list.some(s => !s.e)) return null;
+    const W = BOARD_W, H = BOARD_H, cw = W / BOARD_COLS;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const x = c.getContext("2d");
+    x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+    x.strokeStyle = "#dce6ee"; x.lineWidth = 1;
+    for (let i = 1; i < BOARD_COLS; i++) { x.beginPath(); x.moveTo(i * cw, 0); x.lineTo(i * cw, H); x.stroke(); }
+    for (let j = 1; j < H / cw; j++) { x.beginPath(); x.moveTo(0, j * cw); x.lineTo(W, j * cw); x.stroke(); }
+    const ink = document.createElement("canvas"); ink.width = W; ink.height = H;
+    const y = ink.getContext("2d"); y.lineCap = y.lineJoin = "round";
+    list.forEach(s => {
+      y.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+      y.strokeStyle = s.c; y.lineWidth = (s.e ? 0.035 : 0.006) * W;
+      y.beginPath(); y.moveTo(s.p[0][0] * W, s.p[0][1] * H);
+      if (s.p.length === 1) y.lineTo(s.p[0][0] * W + 0.5, s.p[0][1] * H);
+      for (let i = 1; i < s.p.length; i++) y.lineTo(s.p[i][0] * W, s.p[i][1] * H);
+      y.stroke();
+    });
+    x.drawImage(ink, 0, 0);
+    const pts = list.filter(s => !s.e).flatMap(s => s.p);
+    const padPx = 0.6 * cw;
+    let x0 = Math.min(...pts.map(p => p[0])) * W - padPx, x1 = Math.max(...pts.map(p => p[0])) * W + padPx;
+    let y0 = Math.min(...pts.map(p => p[1])) * H - padPx, y1 = Math.max(...pts.map(p => p[1])) * H + padPx;
+    x0 = Math.max(0, Math.floor(x0 / cw) * cw); y0 = Math.max(0, Math.floor(y0 / cw) * cw);
+    x1 = Math.min(W, Math.ceil(x1 / cw) * cw); y1 = Math.min(H, Math.ceil(y1 / cw) * cw);
+    if (x1 - x0 < W * 0.4) x1 = Math.min(W, x0 + W * 0.4);
+    if (y1 - y0 < H * 0.25) y1 = Math.min(H, y0 + H * 0.25);
+    const out = document.createElement("canvas"); out.width = x1 - x0; out.height = y1 - y0;
+    out.getContext("2d").drawImage(c, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    return { url: out.toDataURL("image/png"), widthPct: Math.round((x1 - x0) / W * 1000) / 10 };
+  }
+
   function renderWorkGo(r, i) {
     const st = stateFor(r);
     const li = el("li", "wgo" + (st.done ? " done" : ""));
@@ -1533,7 +1679,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     clueBtn.addEventListener("click", () => { st.clue = true; clue.hidden = false; });
 
     const wkId = "wk-" + r.id;
-    const wkLab = el("label", "", "My working (optional)");
+    const wkLab = el("label", "", "Or type your working (optional)");
     wkLab.htmlFor = wkId;
     const wk = el("input", "working");
     wk.id = wkId;
@@ -1543,7 +1689,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     wk.placeholder = "e.g. 10.00 − 9.87";
     wk.addEventListener("input", () => { r.pw = wk.value; saveRecords(); });
 
-    li.append(lab, row, fb, clue, worked, wkLab, wk);
+    li.append(lab, row, fb, clue, worked, makeBoard(r.id), wkLab, wk);
     return li;
   }
 
@@ -1564,6 +1710,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
 #printRecord .self .opt.on svg { outline: 3px solid #000; outline-offset: 2px; border-radius: 50%; }
 #printRecord .comment { border: 1px solid #555; min-height: 32mm; padding: 6px 10px; break-inside: avoid; }
 #printRecord .space { display: block; height: 14mm; } /* room to write working by hand */
+#printRecord .board-img { margin-top: 4px; }
+#printRecord .board-img img { display: block; max-height: 70mm; width: auto; height: auto; border: 1px solid #999; }
 `;
   function recordHtml() {
     const goes = lastGoes(workName);
@@ -1572,6 +1720,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     const conds = [...new Set(goes.map(r => r.c).filter(Boolean))].join(", ");
     const blocks = goes.map((r, i) => {
       const off = Math.abs(r.r - r.t);
+      const img = boardImage(boards[r.id]);
       const ans = !r.ph ? "Not answered yet" : r.ph === "Answer shown" ? "Answer shown after 3 tries" : `${esc(r.pa)} s`;
       const rows = [
         ["Target", `${fmtSec(r.t)} s`],
@@ -1580,10 +1729,12 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
         ["Earlier tries", r.pe && r.pe.length ? r.pe.map(esc).join(", ") : "None"],
         ["How it went", esc(r.ph || "Not answered")],
         ["Correct answer", `${fmtSec(off)} s ${off === 0 ? "(on target)" : r.r > r.t ? "late" : "early"}`],
-        ["My working", r.pw ? esc(r.pw) : "<span class='space'></span>"]
+        ["My working", r.pw ? esc(r.pw) : img ? "On the whiteboard, below" : "<span class='space'></span>"]
       ];
       return `<section class="go"><h2>Go ${i + 1} · ${esc(dayText(r.at))}${r.c ? " · " + esc(r.c) : ""}</h2><table>` +
-        rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("") + `</table></section>`;
+        rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("") + `</table>` +
+        (img ? `<div class="board-img"><img src="${img.url}" alt="My whiteboard working" style="max-width: ${img.widthPct}%"></div>` : "") +
+        `</section>`;
     }).join("");
     const self = FACES.map(([k, text]) =>
       `<span class="opt${workFace === k ? " on" : ""}">${faceSvg(k, 34)}<span>${text}</span></span>`).join("");

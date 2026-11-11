@@ -105,13 +105,17 @@ with the target and their time. For each go the pupil types how far from the tar
 
 - Wrong: "Not quite. Have another go." After 2 wrong tries a clue appears (or press *Clue* at any time).
   After 3 wrong tries the worked answer is shown.
-- There is an optional box for their working, and three faces to say how they found it.
+- Each go has a **whiteboard** (white squared paper) to work it out on with a finger, stylus or mouse:
+  four pen colours, Rubber, Undo and Clear (tap twice). Drawings are kept with the go, so they are still
+  there after going back to the clock. There is also a box to type working instead.
+- Three faces let the pupil say how they found it.
 - *Print my record* prints an A4 record: name, date, session, each go with the pupil's answer, earlier tries,
-  how it went (first try, after tries, after a clue, answer shown), the correct answer, their working
-  (or space to write it by hand), the face they chose and a teacher comment box.
+  how it went (first try, after tries, after a clue, answer shown), the correct answer, their whiteboard
+  working (cropped to what they drew) and typed working, or space to write it by hand, the face they chose and a teacher comment box.
   *Save my record to print later* saves the same record as a file.
 - The pupil's answers are saved with each go and appear in the CSV (Pupil's answer, Answer tries,
-  How it went, Pupil's working).
+  How it went, Pupil's working). Whiteboard drawings stay on the computer; they are
+  not in the CSV, so print or save the record to keep them.
 
 On the **Data** screen, untick **Show how far from target** to hide the Difference column (and the mean
 distance and closest columns on the Summary), for example while pupils are working it out.
