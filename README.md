@@ -100,5 +100,22 @@ or *Delete this go*.
 - **Restore from a CSV file** loads an "Every go" download back in, for example on another computer.
   Goes that are already there are skipped.
 
+**Work it out** is a page for pupils. Choose the pupil and it shows their last 5 goes (anomalies left out),
+with the target and their time. For each go the pupil types how far from the target it was and presses *Check*:
+
+- Wrong: "Not quite. Have another go." After 2 wrong tries a clue appears (or press *Clue* at any time).
+  After 3 wrong tries the worked answer is shown.
+- There is an optional box for their working, and three faces to say how they found it.
+- *Print my record* prints an A4 record: name, date, session, each go with the pupil's answer, earlier tries,
+  how it went (first try, after tries, after a clue, answer shown), the correct answer, their working
+  (or space to write it by hand), the face they chose and a teacher comment box.
+  *Save my record to print later* saves the same record as a file.
+- The pupil's answers are saved with each go and appear in the CSV (Pupil's answer, Answer tries,
+  How it went, Pupil's working).
+
+On the **Data** screen, untick **Show how far from target** to hide the Difference column (and the mean
+distance and closest columns on the Summary), for example while pupils are working it out.
+Downloads always include every column.
+
 Data is kept in that browser on that computer only. Nothing is sent over the internet.
 Download a CSV at the end of each lesson as a backup, because clearing the browser's history can delete it.

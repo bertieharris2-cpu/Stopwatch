@@ -184,13 +184,13 @@ body[data-state="running"] .pupil-line .btn { opacity: 0.12; pointer-events: non
   overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
   box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6); z-index: 10;
 }
-.drawer header, .data header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.drawer h2, .data h2 { font-family: var(--font-label); margin: 0; letter-spacing: 0.06em; font-size: 1.3rem; }
+.drawer header, .data header, .work header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.drawer h2, .data h2, .work h2 { font-family: var(--font-label); margin: 0; letter-spacing: 0.06em; font-size: 1.3rem; }
 .drawer h3 {
   font-family: var(--font-label); margin: 0 0 6px; font-size: 0.78rem; text-transform: uppercase;
   letter-spacing: 0.14em; color: var(--muted); font-weight: 500;
 }
-.drawer p.note, .data p.note { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.drawer p.note, .data p.note, .work p.note { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .field > label, .field > .flabel {
   font-family: var(--font-label); font-size: 0.72rem; letter-spacing: 0.14em;
@@ -223,7 +223,7 @@ textarea { resize: vertical; min-height: 6em; }
 .roster .empty { display: block; color: var(--muted); border: 0; }
 
 /* ---- data screen ---- */
-.data {
+.data, .work {
   position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow-y: auto;
   padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(20px + env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column; gap: 14px;
@@ -248,6 +248,37 @@ td.flag input { accent-color: var(--amber); }
 td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
 #copyBox { width: 100%; box-sizing: border-box; min-height: 8em; font-family: ui-monospace, monospace; font-size: 0.8rem; }
 
+/* ---- work it out (pupil-facing) ---- */
+.work .intro { margin: 0; font-size: 1.15rem; max-width: 60ch; }
+.goes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.wgo { border: 1px solid var(--rim); border-radius: 10px; background: var(--sheet); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.wgo .facts { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.wgo .facts .which { color: var(--muted); }
+.wgo .facts b { color: var(--led); font-family: var(--font-label); font-size: 1.25rem; }
+.wgo label { font-family: var(--font-label); font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.wgo .answer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.wgo .answer input { width: 7ch; font-size: 1.3rem; font-variant-numeric: tabular-nums; padding: 8px 10px; }
+.wgo .answer .btn { min-height: 44px; }
+.wgo .working { width: 100%; box-sizing: border-box; }
+.wgo .fb { margin: 0; min-height: 1.4em; font-size: 1.05rem; }
+.wgo .fb.yes { color: var(--led); }
+.wgo .fb.again { color: var(--ink); }
+.wgo .clue, .wgo .worked { margin: 0; padding: 8px 12px; border-left: 3px solid var(--amber); background: var(--chip); }
+.wgo.done { border-color: #23492f; }
+.faces { display: flex; flex-wrap: wrap; gap: 10px; }
+.face { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 120px; padding: 10px 12px; }
+.face svg { width: 48px; height: 48px; }
+.face[aria-pressed="true"] { background: var(--chip-on); border-color: var(--led); }
+/* square corners on the pupil-facing screen */
+.work .btn, .work input, .work select, .wgo, .wgo .clue, .wgo .worked { border-radius: 0; }
+.print-only { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; color: #000 !important; height: auto; }
+  body > *:not(#printRecord) { display: none !important; }
+  #printRecord { display: block !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel.perfect #display, body[data-state="ready"] .hint { animation: none; }
 }
@@ -260,6 +291,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     <div class="top-actions">
       <button class="btn" id="pupilsBtn" type="button" aria-controls="pupilsDrawer" aria-expanded="false">Pupils</button>
       <button class="btn" id="setupBtn" type="button" aria-controls="setupDrawer" aria-expanded="false">Set-up</button>
+      <button class="btn" id="workBtn" type="button">Work it out</button>
       <button class="btn" id="dataBtn" type="button">Data</button>
       <button class="btn" id="fsBtn" type="button">Full screen</button>
     </div>
@@ -379,6 +411,10 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
         <button class="btn" type="button" id="tabSummary" aria-pressed="false">Summary</button>
       </div>
     </div>
+    <label class="check" for="showDiff">
+      <input id="showDiff" type="checkbox">
+      <span>Show how far from target <small>Untick to hide the difference columns on this screen.</small></span>
+    </label>
   </div>
   <div class="row">
     <button class="btn" type="button" id="downloadBtn">Download for Excel (CSV)</button>
@@ -391,8 +427,32 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   <p class="note" id="tableNote"></p>
   <div class="table-wrap"><table id="dataTable"></table></div>
   <textarea id="copyBox" readonly hidden aria-label="Table to copy"></textarea>
-  <p class="note">Data is saved in this browser on this computer only. Download a CSV at the end of each lesson as a backup. A downloaded CSV can be restored here or on another computer.</p>
+  <p class="note">Data is saved in this browser on this computer only. Download a CSV at the end of each lesson as a backup. A downloaded CSV can be restored here or on another computer. Downloads always include every column.</p>
 </section>
+
+<!-- Work it out: a pupil works out how far from the target their last 5 goes were -->
+<section class="work" id="workScreen" hidden aria-label="Work it out">
+  <header>
+    <h2>Work it out</h2>
+    <button class="btn" type="button" id="closeWork">Back to the clock</button>
+  </header>
+  <div class="field" style="max-width: 320px">
+    <label for="workPupil">Pupil</label>
+    <select id="workPupil"></select>
+  </div>
+  <p class="intro" id="workIntro"></p>
+  <ol class="goes" id="workGoes"></ol>
+  <section id="selfCheck" class="field" aria-labelledby="selfTitle">
+    <span class="flabel" id="selfTitle">How did you find it?</span>
+    <div class="faces" id="faces"></div>
+  </section>
+  <div class="row">
+    <button class="btn" type="button" id="printBtn">Print my record</button>
+    <button class="btn" type="button" id="saveRecordBtn">Save my record to print later</button>
+  </div>
+  <p class="status" id="workStatus" role="status"></p>
+</section>
+<div id="printRecord" class="print-only"></div>
 
 <script>
 (() => {
@@ -422,7 +482,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   const label = (list, key) => (list.find(([k]) => k === key) || list[0])[1];
 
   const settings = Object.assign(
-    { target: 1000, hide: "off", feedback: "full", start: "press", moveAfter: "manual", session: "", condition: "", practice: false, sound: true },
+    { target: 1000, hide: "off", feedback: "full", start: "press", moveAfter: "manual", session: "", condition: "", practice: false, sound: true, showDiff: true },
     load("settings", {})
   );
   if (!(Number.isInteger(settings.target) && settings.target >= 50 && settings.target <= 9900)) settings.target = 1000;
@@ -589,7 +649,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   }
 
   function press(t) {
-    if (!$("dataScreen").hidden) return; // the teacher is looking at the data
+    if (!$("dataScreen").hidden || !$("workScreen").hidden) return; // not on the clock screen
     const now = performance.now();
     if (!(t > 0) || Math.abs(t - now) > 1000) t = now;
     if (t - lastPress < LOCKOUT[state]) return;
@@ -818,7 +878,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   window.addEventListener("keydown", e => {
     if (e.key === "Escape") { closeAll(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (!$("dataScreen").hidden) return; // the teacher is using the data screen
+    if (!$("dataScreen").hidden || !$("workScreen").hidden) return; // typing on another screen
     if (IGNORED.has(e.key) || /^F\d{1,2}$/.test(e.key)) return;
     const tgt = e.target;
     if (tgt && tgt.closest && tgt.closest("input, select, textarea")) return;
@@ -850,6 +910,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   function closeAll() {
     for (const [d, btn] of Object.entries(drawers)) { $(d).hidden = true; btn.setAttribute("aria-expanded", "false"); }
     if (!$("dataScreen").hidden) closeData();
+    if (!$("workScreen").hidden) closeWork();
   }
   for (const [d, btn] of Object.entries(drawers)) {
     btn.addEventListener("click", () => ($(d).hidden ? openDrawer(d) : closeAll()));
@@ -1038,10 +1099,18 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     ["Clock while running", r => r.h],
     ["Pupil was shown", r => r.f],
     ["Anomaly", r => r.a ? "Yes" : "No"],
+    ["Pupil's answer (s)", r => r.pa ?? ""],
+    ["Answer tries", r => r.pn ?? ""],
+    ["How it went", r => r.ph || ""],
+    ["Pupil's working", r => r.pw || ""],
     ["ID", r => r.id]
   ];
   // Columns shown on screen (the CSV has them all).
-  const SCREEN_HIDE = new Set(["Distance from target (s)", "Early or late", "ID", "Anomaly"]);
+  const SCREEN_HIDE = new Set(["Distance from target (s)", "Early or late", "ID", "Anomaly", "Answer tries", "Pupil's working"]);
+  // Columns that give away how far from the target a go was; "Show how far from target" hides them.
+  const DIFF_COLS = new Set(["Difference (s)", "Distance from target (s)", "Early or late",
+    "Mean distance from target (s)", "Closest (s)"]);
+  const showCol = h => settings.showDiff || !DIFF_COLS.has(h);
 
   const median = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
@@ -1096,13 +1165,15 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
       $("tableNote").textContent = `One row per pupil, target and condition. ` +
         (anomalies ? `${anomalies} ${anomalies === 1 ? "go marked as an anomaly is" : "goes marked as anomalies are"} left out.` : "Goes marked as anomalies are left out.");
       const rows = summaryRows(list);
+      const sumCols = SUM_COLS.filter(showCol);
+      const numCls = c => (["Pupil", "Target (s)", "Condition"].includes(c) ? "" : "num");
       const head = el("tr");
-      SUM_COLS.forEach((c, i) => head.appendChild(th(c, i > 2 ? "num" : "")));
+      sumCols.forEach(c => head.appendChild(th(c, numCls(c))));
       const body = rows.length ? rows.map(o => {
         const tr = el("tr");
-        SUM_COLS.forEach((c, i) => tr.appendChild(el("td", i > 2 ? "num" : "", String(o[c] === "" ? "–" : o[c]))));
+        sumCols.forEach(c => tr.appendChild(el("td", numCls(c), String(o[c] === "" ? "–" : o[c]))));
         return tr;
-      }) : [emptyRow(SUM_COLS.length)];
+      }) : [emptyRow(sumCols.length)];
       table.replaceChildren(el("thead"), el("tbody"));
       table.tHead.appendChild(head);
       table.tBodies[0].append(...body);
@@ -1112,7 +1183,7 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     $("tableNote").textContent = `${list.length} ${list.length === 1 ? "go" : "goes"}, newest first` +
       (anomalies ? `, ${anomalies} marked as ${anomalies === 1 ? "an anomaly" : "anomalies"}.` : ".") +
       " Tick Anomaly to leave a go out of the summary without deleting it.";
-    const cols = GO_COLS.filter(([h]) => !SCREEN_HIDE.has(h));
+    const cols = GO_COLS.filter(([h]) => !SCREEN_HIDE.has(h) && showCol(h));
     const head = el("tr");
     cols.forEach(([h, , cls]) => head.appendChild(th(h.replace(" (s)", ""), cls && cls.includes("num") ? "num" : "")));
     head.appendChild(th("Anomaly"));
@@ -1163,6 +1234,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
   }
   $("filterSession").addEventListener("change", renderData);
   $("filterPupil").addEventListener("change", renderData);
+  $("showDiff").checked = settings.showDiff;
+  $("showDiff").addEventListener("change", () => { settings.showDiff = $("showDiff").checked; saveSettings(); $("showDiff").blur(); renderData(); });
   $("tabGoes").addEventListener("click", () => { tab = "goes"; renderData(); });
   $("tabSummary").addEventListener("click", () => { tab = "summary"; renderData(); });
 
@@ -1197,8 +1270,8 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     return rows.filter(r => r.some(c => c.trim() !== ""));
   }
 
-  async function offerFile(filename, text) {
-    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  async function offerFile(filename, text, type = "text/csv;charset=utf-8") {
+    const blob = new Blob([text], { type });
     // Inside claude.ai the page asks the viewer to save; opened as a file, a normal download.
     try {
       if (window.claude && typeof window.claude.use === "function") {
@@ -1276,7 +1349,9 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
         records.push({
           id, at, s: get(r, "Session"), p: get(r, "Pupil"), g: parseInt(get(r, "Go"), 10) || 1, t, r: res,
           c: get(r, "Condition"), h: get(r, "Clock while running"), f: get(r, "Pupil was shown"), st: get(r, "Start"),
-          a: /^y/i.test(get(r, "Anomaly"))
+          a: /^y/i.test(get(r, "Anomaly")),
+          ...(get(r, "Pupil's working") ? { pw: get(r, "Pupil's working") } : {}),
+          ...(get(r, "How it went") ? { pa: get(r, "Pupil's answer (s)"), pn: parseInt(get(r, "Answer tries"), 10) || 1, ph: get(r, "How it went") } : {})
         });
         added++;
       }
@@ -1305,6 +1380,238 @@ td.empty { color: var(--muted); padding: 18px 12px; white-space: normal; }
     wipeBtn.dataset.armed = "true";
     wipeBtn.textContent = `Click again to delete all ${records.length} goes`;
     setTimeout(disarmWipe, 4000);
+  });
+
+  // ---------- work it out ----------
+  // A pupil types how far from the target each of their last 5 goes was. Kind feedback:
+  // "Not quite" -> after 2 wrong tries a clue -> after 3 the worked answer. Answers are saved
+  // with the go (and in the CSV); the record prints on A4.
+  const WORK_GOES = 5, TRIES_FOR_CLUE = 2, TRIES_FOR_ANSWER = 3;
+  const workEl = $("workScreen"), workStatus = $("workStatus");
+  let workName = null, workFace = "";
+  const FACES = [
+    ["yes", "I can do this", "#2e9e4f", "M15 30 Q24 38 33 30"],
+    ["nearly", "I'm getting there", "#e8a317", "M15 32 L33 32"],
+    ["help", "I need more help", "#d64545", "M15 35 Q24 27 33 35"]
+  ];
+  const faceSvg = (k, size = 48) => {
+    const [, , col, mouth] = FACES.find(f => f[0] === k);
+    return `<svg viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="${col}" stroke="#000" stroke-width="1.5"/>` +
+      `<circle cx="17" cy="19" r="3" fill="#000"/><circle cx="31" cy="19" r="3" fill="#000"/>` +
+      `<path d="${mouth}" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round"/></svg>`;
+  };
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const lastGoes = name => records.filter(r => r.p === name && !r.a).sort((a, b) => a.at - b.at).slice(-WORK_GOES);
+  const dayText = at => new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  // Pupil-side state for each go they are working on (tries are kept until they get it).
+  const workState = new Map();
+  const stateFor = r => {
+    if (!workState.has(r.id)) workState.set(r.id, { tries: r.pe ? [...r.pe] : [], clue: !!r.pc, done: !!r.ph });
+    return workState.get(r.id);
+  };
+  function workedText(r) {
+    const off = Math.abs(r.r - r.t);
+    if (off === 0) return `Your time and the target were both ${fmtSec(r.t)} s, so the difference is 0.00 s. You were exactly on target.`;
+    const big = Math.max(r.r, r.t), small = Math.min(r.r, r.t);
+    return `Your time was ${fmtSec(r.r)} s and the target was ${fmtSec(r.t)} s. ` +
+      `${fmtSec(big)} − ${fmtSec(small)} = ${fmtSec(off)}, so you were ${fmtSec(off)} s ${r.r > r.t ? "late" : "early"}.`;
+  }
+  const CLUE = "Find the difference between your time and the target. Take the smaller number away from the bigger number.";
+
+  function workNames() {
+    const set = new Set(pupils);
+    for (const r of records) if (r.p) set.add(r.p);
+    return [...set];
+  }
+  function openWork() {
+    closeAll();
+    const names = workNames();
+    const sel = $("workPupil");
+    sel.replaceChildren(...names.map(n => { const o = el("option", "", n); o.value = n; return o; }));
+    workName = names.includes(workName) ? workName : (names.includes(pupilName()) ? pupilName() : names[0] || "");
+    sel.value = workName;
+    workFace = "";
+    workEl.hidden = false;
+    workStatus.textContent = "";
+    renderWork();
+  }
+  function closeWork() { workEl.hidden = true; }
+  $("workBtn").addEventListener("click", openWork);
+  $("closeWork").addEventListener("click", closeWork);
+  $("workPupil").addEventListener("change", () => { workName = $("workPupil").value; workFace = ""; workStatus.textContent = ""; renderWork(); $("workPupil").blur(); });
+
+  function renderWork() {
+    const goes = workName ? lastGoes(workName) : [];
+    const list = $("workGoes");
+    $("workIntro").textContent = !workName ? "Add pupils with the Pupils button first." :
+      !goes.length ? `${workName} has no recorded goes yet.` :
+      `Here ${goes.length === 1 ? "is your last go" : `are your last ${goes.length} goes`}. ` +
+      "For each one, work out how far your time was from the target.";
+    $("selfCheck").hidden = !goes.length;
+    $("printBtn").disabled = $("saveRecordBtn").disabled = !goes.length;
+    list.replaceChildren(...goes.map(renderWorkGo));
+    $("faces").replaceChildren(...FACES.map(([k, text]) => {
+      const b = el("button", "btn face");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(workFace === k));
+      b.innerHTML = faceSvg(k);
+      b.appendChild(el("span", "", text));
+      b.addEventListener("click", () => { workFace = k; renderWork(); });
+      return b;
+    }));
+  }
+
+  function renderWorkGo(r, i) {
+    const st = stateFor(r);
+    const li = el("li", "wgo" + (st.done ? " done" : ""));
+    const facts = el("div", "facts");
+    facts.innerHTML = `<span class="which">Go ${i + 1} · ${esc(dayText(r.at))}</span>` +
+      `<span>Target <b>${fmtSec(r.t)} s</b></span><span>My time <b>${fmtSec(r.r)} s</b></span>`;
+    li.appendChild(facts);
+
+    const inputId = "ans-" + r.id;
+    const lab = el("label", "", "How far from the target?");
+    lab.htmlFor = inputId;
+    const row = el("div", "answer");
+    const input = el("input");
+    input.id = inputId;
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.autocomplete = "off";
+    const unit = el("span", "", "seconds");
+    const checkBtn = el("button", "btn", "Check");
+    checkBtn.type = "button";
+    const clueBtn = el("button", "btn", "Clue");
+    clueBtn.type = "button";
+    row.append(input, unit, checkBtn, clueBtn);
+    const fb = el("p", "fb");
+    fb.setAttribute("aria-live", "polite");
+    const clue = el("p", "clue", CLUE);
+    const worked = el("p", "worked", workedText(r));
+    clue.hidden = !st.clue || st.done;
+    worked.hidden = !(st.done && r.ph === "Answer shown");
+
+    const off = Math.abs(r.r - r.t);
+    const yesText = () => off === 0 ? "Yes, 0.00 s. You were exactly on target." :
+      `Yes. You were ${fmtSec(off)} s ${r.r > r.t ? "late" : "early"}.`;
+    if (st.done) {
+      input.value = r.ph === "Answer shown" ? fmtSec(off) : (r.pa ?? "");
+      input.disabled = true;
+      checkBtn.hidden = clueBtn.hidden = true;
+      if (r.ph !== "Answer shown") { fb.textContent = yesText(); fb.className = "fb yes"; }
+    }
+
+    const finish = (how, answer) => {
+      st.done = true;
+      Object.assign(r, { pa: answer, pn: st.tries.length + (how === "Answer shown" ? 0 : 1), ph: how, pe: [...st.tries], pc: st.clue });
+      saveRecords();
+      if (!dataEl.hidden) renderData();
+    };
+    const check = () => {
+      const given = input.value.trim();
+      if (!given) { fb.textContent = "Type how far away it was first."; fb.className = "fb again"; input.focus(); return; }
+      const n = parseFloat(given.replace(/[^0-9.]/g, ""));
+      if (isNaN(n)) { fb.textContent = "Type a number of seconds, like 0.25."; fb.className = "fb again"; input.focus(); return; }
+      if (Math.abs(n * 100 - off) < 0.5) {
+        finish(st.clue ? "After a clue" : st.tries.length ? `After ${st.tries.length + 1} tries` : "First try", n.toFixed(2));
+        renderWork();
+        return;
+      }
+      st.tries.push(given);
+      if (st.tries.length >= TRIES_FOR_ANSWER) {
+        finish("Answer shown", "");
+        renderWork();
+        return;
+      }
+      if (st.tries.length >= TRIES_FOR_CLUE) { st.clue = true; clue.hidden = false; }
+      fb.textContent = "Not quite. Have another go.";
+      fb.className = "fb again";
+      input.select();
+    };
+    checkBtn.addEventListener("click", check);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") check(); });
+    clueBtn.addEventListener("click", () => { st.clue = true; clue.hidden = false; });
+
+    const wkId = "wk-" + r.id;
+    const wkLab = el("label", "", "My working (optional)");
+    wkLab.htmlFor = wkId;
+    const wk = el("input", "working");
+    wk.id = wkId;
+    wk.type = "text";
+    wk.maxLength = 120;
+    wk.value = r.pw || "";
+    wk.placeholder = "e.g. 10.00 − 9.87";
+    wk.addEventListener("input", () => { r.pw = wk.value; saveRecords(); });
+
+    li.append(lab, row, fb, clue, worked, wkLab, wk);
+    return li;
+  }
+
+  // The A4 record. The same markup prints from here and goes into the saved file.
+  const RECORD_CSS = `
+#printRecord { font-family: "Atkinson Hyperlegible", Arial, sans-serif; font-size: 11pt; color: #000; background: #fff; line-height: 1.35; }
+#printRecord h1 { font-size: 17pt; margin: 0 0 6px; }
+#printRecord .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 18px; margin: 0 0 12px; }
+#printRecord .meta b { display: inline-block; min-width: 7em; }
+#printRecord .go { border: 1px solid #555; padding: 8px 10px; margin: 0 0 8px; break-inside: avoid; page-break-inside: avoid; }
+#printRecord .go h2 { font-size: 12pt; margin: 0 0 4px; }
+#printRecord .go table { border-collapse: collapse; width: 100%; }
+#printRecord .go td { padding: 2px 6px 2px 0; vertical-align: top; }
+#printRecord .go td:first-child { width: 36%; color: #333; }
+#printRecord .self { display: flex; gap: 18px; align-items: center; margin: 10px 0; break-inside: avoid; }
+#printRecord .self .opt { display: flex; align-items: center; gap: 6px; opacity: 0.35; }
+#printRecord .self .opt.on { opacity: 1; font-weight: bold; }
+#printRecord .self .opt.on svg { outline: 3px solid #000; outline-offset: 2px; border-radius: 50%; }
+#printRecord .comment { border: 1px solid #555; min-height: 32mm; padding: 6px 10px; break-inside: avoid; }
+#printRecord .space { display: block; height: 14mm; } /* room to write working by hand */
+`;
+  function recordHtml() {
+    const goes = lastGoes(workName);
+    const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const sessions = [...new Set(goes.map(r => r.s).filter(Boolean))].join(", ");
+    const conds = [...new Set(goes.map(r => r.c).filter(Boolean))].join(", ");
+    const blocks = goes.map((r, i) => {
+      const off = Math.abs(r.r - r.t);
+      const ans = !r.ph ? "Not answered yet" : r.ph === "Answer shown" ? "Answer shown after 3 tries" : `${esc(r.pa)} s`;
+      const rows = [
+        ["Target", `${fmtSec(r.t)} s`],
+        ["My time", `${fmtSec(r.r)} s`],
+        ["My answer: how far from the target", ans],
+        ["Earlier tries", r.pe && r.pe.length ? r.pe.map(esc).join(", ") : "None"],
+        ["How it went", esc(r.ph || "Not answered")],
+        ["Correct answer", `${fmtSec(off)} s ${off === 0 ? "(on target)" : r.r > r.t ? "late" : "early"}`],
+        ["My working", r.pw ? esc(r.pw) : "<span class='space'></span>"]
+      ];
+      return `<section class="go"><h2>Go ${i + 1} · ${esc(dayText(r.at))}${r.c ? " · " + esc(r.c) : ""}</h2><table>` +
+        rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("") + `</table></section>`;
+    }).join("");
+    const self = FACES.map(([k, text]) =>
+      `<span class="opt${workFace === k ? " on" : ""}">${faceSvg(k, 34)}<span>${text}</span></span>`).join("");
+    return `<h1>Stop the Clock: how far from the target?</h1>` +
+      `<div class="meta"><div><b>Name</b> ${esc(workName)}</div><div><b>Date</b> ${esc(today)}</div>` +
+      `<div><b>Session</b> ${esc(sessions) || "–"}</div><div><b>Condition</b> ${esc(conds) || "–"}</div>` +
+      `<div style="grid-column: 1 / -1"><b>Learning focus</b> I can find the difference between two times.</div></div>` +
+      blocks +
+      `<div class="self"><b>How I found it:</b>${self}</div>` +
+      `<div class="comment"><b>Teacher comment</b></div>`;
+  }
+  function buildPrintRecord() {
+    const box = $("printRecord");
+    box.innerHTML = `<style>${RECORD_CSS}</style>` + recordHtml();
+  }
+  $("printBtn").addEventListener("click", () => {
+    buildPrintRecord();
+    try { window.print(); } catch (e) {}
+    workStatus.textContent = "If no print window opened, use Save my record and print the saved file.";
+  });
+  $("saveRecordBtn").addEventListener("click", async () => {
+    const safe = (workName || "pupil").replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "") || "pupil";
+    const name = `stop-the-clock-record-${safe}-${ymd(new Date())}.html`;
+    const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Stop the Clock record</title>` +
+      `<style>@page { size: A4; margin: 14mm; } body { margin: 0; background: #fff; } #printRecord { max-width: 180mm; margin: 0 auto; padding: 10mm 0; } ${RECORD_CSS}</style>` +
+      `</head><body><div id="printRecord">${recordHtml()}</div></body></html>`;
+    const res = await offerFile(name, doc, "text/html;charset=utf-8");
+    workStatus.textContent = res === "declined" ? "Save cancelled." : `Saved ${name}. Open it and print it.`;
   });
 
   // ---------- full screen ----------
